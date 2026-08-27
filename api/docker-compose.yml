@@ -1,0 +1,21 @@
+# Local PostgreSQL for development. Run: docker compose up -d
+# Then: npm run migrate && npm run dev
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: etsy
+      POSTGRES_PASSWORD: etsy
+      POSTGRES_DB: etsy_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etsy -d etsy_tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

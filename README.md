@@ -31,8 +31,8 @@ Central server: Ingestion API → PostgreSQL (events + snapshots) → Analytics
 | Path          | What                                                          | Phase |
 |---------------|--------------------------------------------------------------|-------|
 | `extension/`  | MV3 Chrome extension — the core capture engine               | **1 ✅** |
-| `db/`         | PostgreSQL schema (event log + snapshot time series)         | 2 |
-| `api/`        | Central ingestion API (dedup + validation + normalization)   | 2 |
+| `db/`         | PostgreSQL schema (event log + snapshot time series)         | **2 ✅** |
+| `api/`        | Central ingestion API (dedup + validation + normalization)   | **2 ✅** |
 | `sweeper/`    | CDP Sweeper (puppeteer-core) — daily guaranteed page sweep    | 4 |
 | `analytics/`  | Correlation / control-group / health-score queries           | 5 |
 
@@ -42,7 +42,7 @@ Central server: Ingestion API → PostgreSQL (events + snapshots) → Analytics
    endpoints in DevTools, fill `endpoints.config.json`, dump captured JSON
    locally and confirm the right data arrives. ← **implemented**
 2. **Phase 2 — Central DB + ingestion:** schema, `POST /ingest/http`, dedup +
-   `raw_captures`; wire the extension to it.
+   `raw_captures`; wire the extension to it. ← **implemented**
 3. **Phase 3 — Parsers + snapshot/event:** per-`type` parsers; populate
    `listing_snapshots`, `stats_daily`, `messages`; derive events via snapshot diff.
 4. **Phase 4 — CDP Sweeper + multi-VPS:** daily guaranteed sweep; per-VPS
@@ -52,9 +52,12 @@ Central server: Ingestion API → PostgreSQL (events + snapshots) → Analytics
 
 ## Current status
 
-**Phase 1 is implemented and tested** — see [`extension/README.md`](extension/README.md).
-The `db/schema.sql` reference DDL is in place for Phase 2. `api/`, `sweeper/`,
-and `analytics/` are stubbed with notes for the phases that build them.
+**Phases 1 & 2 are implemented and tested.**
+- Phase 1 — the MV3 extension: see [`extension/README.md`](extension/README.md).
+- Phase 2 — DB schema (`db/schema.sql`) + the ingestion API
+  ([`api/README.md`](api/README.md)), validated end-to-end against real Postgres.
+
+`sweeper/` and `analytics/` are stubbed with notes for the phases that build them.
 
 ## Security & isolation (summary)
 
