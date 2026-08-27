@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS listing_stats_daily (
 CREATE TABLE IF NOT EXISTS ads_daily (
   shop_id           BIGINT REFERENCES shops(id),
   stat_date         DATE,
-  listing_id        BIGINT,       -- NULL = shop total
+  listing_id        BIGINT,       -- 0 = shop total (PK columns cannot be NULL)
   state             TEXT,         -- on | off
   spend             NUMERIC(12,2),
   impressions       INT,
@@ -181,3 +181,23 @@ CREATE TABLE IF NOT EXISTS messages (
   has_text   BOOLEAN,
   PRIMARY KEY (shop_id, thread_id, message_id)
 );
+
+-- ── Derived: first-response time per thread (spec §5.1) ─────────────────────
+CREATE OR REPLACE VIEW response_metrics AS
+WITH firsts AS (
+  SELECT shop_id, thread_id,
+         MIN(sent_at) FILTER (WHERE direction = 'in')  AS first_in,
+         MIN(sent_at) FILTER (WHERE direction = 'out') AS first_out
+  FROM messages
+  GROUP BY shop_id, thread_id
+)
+SELECT
+  shop_id,
+  thread_id,
+  first_in,
+  first_out,
+  EXTRACT(EPOCH FROM (first_out - first_in)) AS first_response_seconds
+FROM firsts
+WHERE first_in IS NOT NULL
+  AND first_out IS NOT NULL
+  AND first_out >= first_in;

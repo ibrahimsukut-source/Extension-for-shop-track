@@ -45,6 +45,7 @@ Central server: Ingestion API → PostgreSQL (events + snapshots) → Analytics
    `raw_captures`; wire the extension to it. ← **implemented**
 3. **Phase 3 — Parsers + snapshot/event:** per-`type` parsers; populate
    `listing_snapshots`, `stats_daily`, `messages`; derive events via snapshot diff.
+   ← **implemented** (`api/` parse job)
 4. **Phase 4 — CDP Sweeper + multi-VPS:** daily guaranteed sweep; per-VPS
    isolated profile + token; public API puller.
 5. **Phase 5 — Analytics + dashboard:** before/after + control-group views,
@@ -52,10 +53,12 @@ Central server: Ingestion API → PostgreSQL (events + snapshots) → Analytics
 
 ## Current status
 
-**Phases 1 & 2 are implemented and tested.**
+**Phases 1–3 are implemented and tested.**
 - Phase 1 — the MV3 extension: see [`extension/README.md`](extension/README.md).
 - Phase 2 — DB schema (`db/schema.sql`) + the ingestion API
   ([`api/README.md`](api/README.md)), validated end-to-end against real Postgres.
+- Phase 3 — parsers + snapshot/event derivation: the `npm run parse` job turns
+  `raw_captures` into the normalized tables and derives snapshot-diff events.
 
 `sweeper/` and `analytics/` are stubbed with notes for the phases that build them.
 

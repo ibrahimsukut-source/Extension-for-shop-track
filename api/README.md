@@ -52,9 +52,29 @@ npm run dev                     # http://localhost:8080
 npm run dev        # watch-mode server (tsx)
 npm start          # run server
 npm run migrate    # apply db/schema.sql
+npm run parse      # Phase 3: parse unparsed raw_captures -> normalized tables
 npm run typecheck  # tsc --noEmit
 npm test           # unit + integration (pg-mem) + route tests
 ```
+
+## Phase 3 — parsers, snapshots & derived events
+
+`npm run parse` drains unparsed `raw_captures` into the normalized tables and is
+idempotent + re-runnable (spec §3). Run it on a schedule (cron / BullMQ, §8).
+
+- **Parsers** (`src/parsers/`): one per `capture_type` — `stats`, `listing`,
+  `ads`, `order`, `review`, `messages`. They probe candidate field names and
+  coerce loosely (Etsy's internal shapes aren't contractual), never throwing on
+  unexpected input; unknown types are left `parsed = false` for a future parser.
+- **Populated tables:** `stats_daily`, `listing_stats_daily`, `listing_snapshots`,
+  `ads_daily` (`listing_id = 0` = shop total), `orders` + `order_items`,
+  `reviews`, `message_threads` + `messages`. Buyer PII is stored only as a hash.
+- **Snapshot diff** (`src/parse/diff.ts`, spec §2.5): the most reliable action
+  detection — comparing a listing's consecutive snapshots emits `price_change`,
+  `deactivated`/`activated`/`state_change`, `photo_changed`, `title_change`,
+  `tag_change` events (`origin = snapshot_diff`), catching out-of-browser edits too.
+- **Response time** (`response_metrics` view, §5.1): first `out` after the first
+  `in`, per thread.
 
 ## Tests
 

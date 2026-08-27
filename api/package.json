@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "migrate": "tsx src/migrate.ts",
+    "parse": "tsx src/parse.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"test/*.test.ts\""
   },
