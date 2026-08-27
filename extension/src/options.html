@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Etsy Shop Tracker — Settings</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+      h1 { font-size: 1.25rem; }
+      label { display: block; margin: 0.75rem 0 0.25rem; font-weight: 600; font-size: 0.9rem; }
+      input[type="text"], input[type="url"] { width: 100%; padding: 0.5rem; box-sizing: border-box; }
+      .row { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+      .hint { color: #888; font-size: 0.8rem; margin-top: 0.25rem; }
+      button { padding: 0.5rem 1rem; margin-top: 1rem; cursor: pointer; }
+      #status { margin-left: 0.75rem; color: green; }
+      #recent { width: 100%; height: 220px; margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; }
+      fieldset { margin-top: 1.5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Etsy Shop Tracker — Settings</h1>
+    <p class="hint">
+      Configure this per VPS. In Phase 1 only <strong>Shop tag</strong> is required
+      (fallback shop identity). Setting API host + token enables forwarding to the
+      central ingestion API.
+    </p>
+
+    <label for="shopTag">Shop tag (short internal name)</label>
+    <input id="shopTag" type="text" placeholder="my-shop-01" />
+
+    <label for="vpsHost">VPS host (metadata)</label>
+    <input id="vpsHost" type="text" placeholder="vps-eu-1" />
+
+    <label for="chromeProfile">Chrome profile (metadata)</label>
+    <input id="chromeProfile" type="text" placeholder="Profile 1" />
+
+    <fieldset>
+      <legend>Central API (optional — Phase 2)</legend>
+      <label for="apiHost">Ingestion API host</label>
+      <input id="apiHost" type="url" placeholder="https://api.example.com" />
+      <label for="apiToken">Bearer token (per VPS)</label>
+      <input id="apiToken" type="text" placeholder="paste token" />
+      <div class="row">
+        <input id="forwardEnabled" type="checkbox" />
+        <label for="forwardEnabled" style="margin: 0; font-weight: 400">Enable forwarding to API</label>
+      </div>
+    </fieldset>
+
+    <div class="row">
+      <button id="save">Save</button>
+      <span id="status"></span>
+    </div>
+
+    <fieldset>
+      <legend>Recent captures (local, last 200)</legend>
+      <button id="refresh">Refresh</button>
+      <button id="clear">Clear</button>
+      <span id="queueInfo" class="hint"></span>
+      <textarea id="recent" readonly></textarea>
+    </fieldset>
+
+    <script src="options.js"></script>
+  </body>
+</html>

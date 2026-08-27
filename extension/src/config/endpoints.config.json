@@ -1,0 +1,16 @@
+{
+  "$comment": "Config-driven endpoint classification. Etsy's internal endpoint paths change over time, so keep them here (not in code). Observe real paths in DevTools -> Network and update the patterns. '*' is a wildcard matching any run of characters; matching is case-insensitive and substring-based (no start/end anchoring required).",
+  "patterns": [
+    { "match": "/api/v3/ajax/bespoke/member/shops/*/stats*", "type": "stats" },
+    { "match": "*/shops/*/dashboard*", "type": "stats" },
+    { "match": "*/conversations*", "type": "messages" },
+    { "match": "*/messages*", "type": "messages" },
+    { "match": "*/advertising*", "type": "ads" },
+    { "match": "*/ads*", "type": "ads" },
+    { "match": "*/listings*", "type": "listing" },
+    { "match": "*/inventory*", "type": "listing" },
+    { "match": "*/receipts*", "type": "order" },
+    { "match": "*/orders*", "type": "order" },
+    { "match": "*/reviews*", "type": "review" }
+  ]
+}
