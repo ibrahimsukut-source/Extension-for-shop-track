@@ -99,7 +99,7 @@ test("stats: entries with listing_id go to listing_stats_daily", () => {
   assert.equal(out.listingStatsDaily![0].listingId, 42);
 });
 
-test("listing: extracts snapshot fields, price, image hashes", () => {
+test("listing: extracts snapshot fields, price, image hashes (money-object shape)", () => {
   const out = parseListing(
     { listings: [{ listing_id: 7, title: "Mug", state: "active", price: { amount: 2000, divisor: 100 }, quantity: 3, tags: ["a", "b"], images: [{ url: "u1" }, { url: "u2" }], num_favorers: 12 }] },
     ctx
@@ -112,6 +112,39 @@ test("listing: extracts snapshot fields, price, image hashes", () => {
   assert.equal(s.imageHashes?.length, 2);
   assert.deepEqual(s.tags, ["a", "b"]);
   assert.equal(s.favorites, 12);
+});
+
+test("listing: real Etsy shape — numeric state, string price, image_id, flags", () => {
+  const real = {
+    listing_id: 4448561758,
+    title: "Custom Mommy and Baby Photo Stone Plaque",
+    state: 0, // numeric!
+    is_activateable: false,
+    is_deactivateable: true,
+    shop_section_id: 56895006,
+    price_int: 198200,
+    price: "1982.00",
+    quantity: 993,
+    tags: ["mother's day gift", "boy mama photo"],
+    listing_images: [{ image_id: 7698388571, url: "https://i.etsystatic.com/…/il_fullxfull.jpg" }],
+    inventory_min_price_with_symbol: "1,982 TL",
+  };
+  const out = parseListing([real], ctx); // bare array, as Etsy returns
+  const s = out.listingSnapshots![0];
+  assert.equal(s.listingId, 4448561758);
+  assert.equal(s.state, "active"); // mapped from flags, not "0"
+  assert.equal(s.price, 1982); // string price parsed
+  assert.equal(s.currency, "TRY"); // inferred from "1,982 TL"
+  assert.equal(s.quantity, 993);
+  assert.equal(s.sectionId, 56895006);
+  assert.equal(s.numImages, 1);
+  assert.equal(s.imageHashes?.length, 1);
+  assert.deepEqual(s.tags, ["mother's day gift", "boy mama photo"]);
+});
+
+test("listing: inactive when is_activateable is true", () => {
+  const out = parseListing([{ listing_id: 9, state: 1, is_activateable: true, is_deactivateable: false, price: "10.00" }], ctx);
+  assert.equal(out.listingSnapshots![0].state, "inactive");
 });
 
 test("listing: entry without id is skipped", () => {
