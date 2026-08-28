@@ -7,6 +7,7 @@ import * as esbuild from "esbuild";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import { rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -79,9 +80,14 @@ test("resolveShopId: prefers shop_id from body", () => {
   assert.equal(id, "123");
 });
 
-test("resolveShopId: falls back to URL shop id", () => {
+test("resolveShopId: falls back to URL shop id (singular and plural)", () => {
   assert.equal(lib.resolveShopId("https://www.etsy.com/shops/456/listings", {}, "tag"), "456");
   assert.equal(lib.resolveShopId("https://www.etsy.com/x?shop_id=789", {}, "tag"), "789");
+  // Etsy's real internal path is singular: /api/v3/ajax/shop/{id}/...
+  assert.equal(
+    lib.resolveShopId("https://www.etsy.com/api/v3/ajax/shop/32467610/listings/v3/search?query=", {}, "tag"),
+    "32467610"
+  );
 });
 
 test("resolveShopId: falls back to shop tag when nothing else", () => {
@@ -92,4 +98,30 @@ test("resolveShopId: falls back to shop tag when nothing else", () => {
 test("resolveShopId: finds nested shop_id and ignores non-numeric strings", () => {
   const body = { shop: { info: { shop_id: "555" } }, other: "shop_id-ish" };
   assert.equal(lib.resolveShopId("https://www.etsy.com/x", body, null), "555");
+});
+
+// Guards the shipped endpoints.config.json against real OrnamentsPoint endpoints,
+// so the ads-before-listing ordering (promoted-listing URLs contain "listings")
+// and the singular /shop/ paths keep classifying correctly.
+test("classify: real Etsy endpoints via the shipped config", () => {
+  const cfg = JSON.parse(readFileSync(path.join(here, "../src/config/endpoints.config.json"), "utf8"));
+  const compiled = lib.compilePatterns(cfg.patterns);
+  const c = (u) => lib.classify(u, compiled);
+  const B = "https://www.etsy.com/api/v3/ajax/shop/32467610";
+
+  assert.equal(c(`${B}/listings/v3/search?state=active`), "listing");
+  assert.equal(c(`${B}/listings/elasticsearch/facets`), "listing");
+  assert.equal(c(`${B}/listings/search/stats?listing_ids[]=1`), "listing");
+  // Promoted-listing (ads) URLs must be ads, not listing, despite containing "listings".
+  assert.equal(c(`${B}/prolist/stats/listings?start_date=2026-08-01`), "ads");
+  assert.equal(c(`${B}/prolist/listings/strategy`), "ads");
+  assert.equal(c(`${B}/prolist/stats`), "ads");
+  assert.equal(c(`${B}/offsite-ads-data/ad-traffic`), "ads");
+  assert.equal(c("https://www.etsy.com/api/v3/ajax/bespoke/shop/32467610/etsyads"), "ads");
+  // Dashboard/summary -> stats.
+  assert.equal(c(`${B}/dashboard`), "stats");
+  assert.equal(c(`${B}/summary`), "stats");
+  // Third-party trackers stay unmatched (dropped as noise).
+  assert.equal(c("https://siteintercept.qualtrics.com/WRSiteInterceptEngine/Targeting.php"), null);
+  assert.equal(c(`${B}/payments/monthly-statement`), null);
 });

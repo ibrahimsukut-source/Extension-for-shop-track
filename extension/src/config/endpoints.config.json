@@ -1,16 +1,25 @@
 {
-  "$comment": "Config-driven endpoint classification. Etsy's internal endpoint paths change over time, so keep them here (not in code). Observe real paths in DevTools -> Network and update the patterns. '*' is a wildcard matching any run of characters; matching is case-insensitive and substring-based (no start/end anchoring required).",
+  "$comment": "Config-driven endpoint classification, tuned from real OrnamentsPoint (shop 32467610) captures. Etsy uses /api/v3/ajax/shop/{id}/... (singular 'shop'). '*' is a wildcard; matching is case-insensitive and substring-based; FIRST matching pattern wins, so ads patterns precede listing (promoted-listing URLs contain 'listings'). Observe new paths via the extension's discovery mode and add them here.",
   "patterns": [
-    { "match": "/api/v3/ajax/bespoke/member/shops/*/stats*", "type": "stats" },
-    { "match": "*/shops/*/dashboard*", "type": "stats" },
+    { "match": "*/prolist*", "type": "ads" },
+    { "match": "*/offsite-ads*", "type": "ads" },
+    { "match": "*/offsite_ads*", "type": "ads" },
+    { "match": "*/etsyads*", "type": "ads" },
+    { "match": "*/advertising*", "type": "ads" },
+
     { "match": "*/conversations*", "type": "messages" },
     { "match": "*/messages*", "type": "messages" },
-    { "match": "*/advertising*", "type": "ads" },
-    { "match": "*/ads*", "type": "ads" },
-    { "match": "*/listings*", "type": "listing" },
-    { "match": "*/inventory*", "type": "listing" },
+
     { "match": "*/receipts*", "type": "order" },
     { "match": "*/orders*", "type": "order" },
-    { "match": "*/reviews*", "type": "review" }
+
+    { "match": "*/reviews*", "type": "review" },
+
+    { "match": "/api/v3/ajax/bespoke/member/shops/*/stats*", "type": "stats" },
+    { "match": "*/shop/*/dashboard", "type": "stats" },
+    { "match": "*/shop/*/summary", "type": "stats" },
+
+    { "match": "*/listings*", "type": "listing" },
+    { "match": "*/inventory*", "type": "listing" }
   ]
 }

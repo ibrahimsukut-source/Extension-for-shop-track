@@ -5,7 +5,7 @@
 //   3. fallback SHOP_TAG configured per-VPS at build/deploy time
 
 const URL_SHOP_PATTERNS: RegExp[] = [
-  /\/shops\/(\d+)(?:[/?]|$)/i, // /shops/12345678/...
+  /\/shops?\/(\d+)(?:[/?]|$)/i, // /shop/12345678/... or /shops/12345678/...
   /[?&]shop_id=(\d+)/i, // ...?shop_id=12345678
 ];
 
