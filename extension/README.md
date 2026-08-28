@@ -46,7 +46,13 @@ npm run build      # → dist/  (load this unpacked in Chrome)
 npm run watch      # rebuild on change
 npm run typecheck  # tsc --noEmit
 npm test           # unit tests for classify + shop-id logic
+npm run test:e2e   # opt-in: loads the extension in real Chromium (see e2e/README.md)
 ```
+
+The `test:e2e` run proves the interception pipeline works in a real browser:
+`fetch` + `XHR` JSON responses are captured, classified, `shop_id`-resolved, and
+unmatched URLs dropped. It has also been validated as a full loop
+(extension → ingestion API → PostgreSQL → parse job).
 
 ## Load & verify (Phase 1 acceptance)
 

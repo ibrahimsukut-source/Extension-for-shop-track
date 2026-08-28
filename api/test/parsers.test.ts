@@ -24,6 +24,13 @@ test("stats: extracts daily rows and computes conversion", () => {
   assert.deepEqual(r.trafficSources, { etsy_search: 60 });
 });
 
+test("stats: a lone day object (not array-wrapped) still parses", () => {
+  const out = parseStats({ shop_id: 12345, date: "2026-08-26", visits: 10, views: 42, orders: 2 }, ctx);
+  assert.equal(out.statsDaily?.length, 1);
+  assert.equal(out.statsDaily![0].statDate, "2026-08-26");
+  assert.equal(out.statsDaily![0].visits, 10);
+});
+
 test("stats: entries with listing_id go to listing_stats_daily", () => {
   const out = parseStats({ stats: [{ date: "2026-08-26", listing_id: 42, views: 9, orders: 1 }] }, ctx);
   assert.equal(out.statsDaily?.length, 0);

@@ -21,8 +21,10 @@ export function pick(obj: unknown, keys: string[]): unknown {
 
 /**
  * Locate the array of entities inside a capture body. Tries the given candidate
- * keys (and a few generic wrappers), else returns the body itself if it is an
- * array, else an empty array.
+ * keys (and a few generic wrappers). When no array is found but the body is a
+ * single object, returns [body] so a lone entity (e.g. a single day of stats, or
+ * one listing) is still parsed — each parser guards on its own required key, so
+ * a non-entity wrapper yields no rows. Returns [] for anything else.
  */
 export function getArray(body: unknown, keys: string[]): JsonObject[] {
   if (Array.isArray(body)) return body.filter(isObject);
@@ -37,6 +39,7 @@ export function getArray(body: unknown, keys: string[]): JsonObject[] {
         }
       }
     }
+    return [body]; // lone entity fallback
   }
   return [];
 }
