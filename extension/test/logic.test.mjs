@@ -121,6 +121,10 @@ test("classify: real Etsy endpoints via the shipped config", () => {
   // Dashboard/summary -> stats.
   assert.equal(c(`${B}/dashboard`), "stats");
   assert.equal(c(`${B}/summary`), "stats");
+  // The real daily-stats endpoint and its per-listing variant -> stats (before listing).
+  assert.equal(c("https://www.etsy.com/api/v3/ajax/bespoke/shop/32467610/shop-analytics-stats?date=yesterday"), "stats");
+  assert.equal(c("https://www.etsy.com/api/v3/ajax/bespoke/shop/32467610/shop-analytics-stats/listings"), "stats");
+  assert.equal(c(`${B}/stats/traffic-detail/etsysearch`), "stats");
   // Third-party trackers stay unmatched (dropped as noise).
   assert.equal(c("https://siteintercept.qualtrics.com/WRSiteInterceptEngine/Targeting.php"), null);
   assert.equal(c(`${B}/payments/monthly-statement`), null);

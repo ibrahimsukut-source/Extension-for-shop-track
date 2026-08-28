@@ -24,6 +24,67 @@ test("stats: extracts daily rows and computes conversion", () => {
   assert.deepEqual(r.trafficSources, { etsy_search: 60 });
 });
 
+test("stats: real shop-analytics-stats shape (metrics_summary + traffic + listings)", () => {
+  const body = {
+    start_date: "08/26/2026",
+    end_date: "08/26/2026",
+    currency_filter: "TRY",
+    traffic_breakdown: {
+      etsy_traffic: {
+        traffic_sources: [
+          { short_key: "etsy", visits: 3 },
+          { short_key: "etsysearch", visits: 0 },
+          { short_key: "external_search", visits: 1 },
+        ],
+      },
+      user_traffic: {
+        traffic_sources: [
+          { short_key: "other", visits: 9 },
+          { short_key: "social", visits: 0 },
+          { short_key: "etsyads", visits: 0 },
+        ],
+      },
+    },
+    metrics_summary: {
+      visits: { total: "15" },
+      orders: { total: "0" },
+      revenue: { total: "0 TL", long_total: "0.00 TL" },
+      conversion_rate: { total: "0%" },
+    },
+    listings: {
+      section_header: "Shoppers viewed your listings 11 times",
+      listings: [
+        { id: 4448562066, title: "Slate", visits: "2", orders: "0", revenue: "0 TL", favorites: "0", badge_text: "Active" },
+        { id: 1823771082, title: "Ornament", visits: "1", orders: "0", revenue: "0 TL", favorites: "0", badge_text: "Active" },
+      ],
+    },
+  };
+  const out = parseStats(body, ctx);
+  assert.equal(out.statsDaily?.length, 1);
+  const s = out.statsDaily![0];
+  assert.equal(s.statDate, "2026-08-26");
+  assert.equal(s.visits, 15);
+  assert.equal(s.views, 11);
+  assert.equal(s.orders, 0);
+  assert.equal(s.revenue, 0);
+  assert.equal(s.currency, "TRY");
+  assert.equal(s.conversionRate, 0);
+  assert.deepEqual(s.trafficSources, { etsy: 3, etsysearch: 0, external_search: 1, other: 9, social: 0, etsyads: 0 });
+  // per-listing daily stats
+  assert.equal(out.listingStatsDaily?.length, 2);
+  assert.equal(out.listingStatsDaily![0].listingId, 4448562066);
+  assert.equal(out.listingStatsDaily![0].visits, 2);
+});
+
+test("stats: conversion percent like '2.5%' becomes 0.025", () => {
+  const body = {
+    start_date: "08/26/2026",
+    metrics_summary: { visits: { total: "100" }, orders: { total: "2" }, conversion_rate: { total: "2.5%" }, revenue: { total: "0 TL" } },
+  };
+  const out = parseStats(body, ctx);
+  assert.equal(out.statsDaily![0].conversionRate, 0.025);
+});
+
 test("stats: a lone day object (not array-wrapped) still parses", () => {
   const out = parseStats({ shop_id: 12345, date: "2026-08-26", visits: 10, views: 42, orders: 2 }, ctx);
   assert.equal(out.statsDaily?.length, 1);
