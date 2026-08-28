@@ -184,9 +184,12 @@ export async function upsertMessageThread(q: Queryable, shopId: number, t: Messa
 
 async function upsertMessage(q: Queryable, shopId: number, threadId: string, m: MessageRow): Promise<void> {
   await q.query(
-    `INSERT INTO messages (shop_id, thread_id, message_id, direction, sent_at, has_text)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     ON CONFLICT (shop_id, thread_id, message_id) DO NOTHING`,
-    [shopId, threadId, m.messageId, m.direction, m.sentAt, m.hasText]
+    `INSERT INTO messages (shop_id, thread_id, message_id, direction, sender_id, sent_at, has_text)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (shop_id, thread_id, message_id) DO UPDATE SET
+       direction = COALESCE(EXCLUDED.direction, messages.direction),
+       sender_id = COALESCE(EXCLUDED.sender_id, messages.sender_id),
+       sent_at = EXCLUDED.sent_at, has_text = EXCLUDED.has_text`,
+    [shopId, threadId, m.messageId, m.direction, m.senderId, m.sentAt, m.hasText]
   );
 }

@@ -200,6 +200,49 @@ test("messages: direction, has_text, last_message_at", () => {
   assert.equal(t.buyerHash?.length, 32);
 });
 
+test("ads: hourly click stats aggregate to daily clicks (comparisonStats ignored)", () => {
+  const body = {
+    comparisonStats: [{ clickCount: 5, timestamp: 1787630400 }], // previous period -> ignored
+    stats: [
+      { clickCount: 2, timestamp: 1787716800 },
+      { clickCount: 3, timestamp: 1787720400 }, // same UTC day -> summed
+    ],
+  };
+  const out = parseAds(body, ctx);
+  assert.equal(out.adsDaily?.length, 1);
+  assert.equal(out.adsDaily![0].clicks, 5);
+  assert.equal(out.adsDaily![0].listingId, 0);
+  assert.equal(out.adsDaily![0].spend, null);
+  assert.equal(out.adsDaily![0].impressions, null);
+});
+
+test("messages: real message-list-data shape (flat, sender_id, direction unknown)", () => {
+  const out = parseMessages(
+    {
+      messages: [
+        {
+          conversation_id: 1663517645,
+          conversation_message_id: 7299322386,
+          create_date: 1779258673,
+          sender_id: 545415690,
+          is_system_message: false,
+          message: "<a href='...'>Order #4037780491</a> Hello Sierra",
+        },
+      ],
+      rollups: [],
+    },
+    ctx
+  );
+  const t = out.messageThreads![0];
+  assert.equal(t.threadId, "1663517645");
+  assert.equal(t.messages.length, 1);
+  assert.equal(t.messages[0].messageId, "7299322386");
+  assert.equal(t.messages[0].senderId, 545415690);
+  assert.equal(t.messages[0].hasText, true);
+  assert.equal(t.messages[0].direction, null); // not labeled by this endpoint
+  assert.ok(t.lastMessageAt?.startsWith("2026-05-20"));
+});
+
 test("parsers never throw on garbage input", () => {
   for (const p of [parseStats, parseListing, parseAds, parseOrder, parseReview, parseMessages]) {
     assert.doesNotThrow(() => p(null, ctx));

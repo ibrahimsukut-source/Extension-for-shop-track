@@ -176,7 +176,8 @@ CREATE TABLE IF NOT EXISTS messages (
   shop_id    BIGINT,
   thread_id  TEXT,
   message_id TEXT,
-  direction  TEXT,             -- in | out
+  direction  TEXT,             -- in | out (NULL until the seller's user id is known)
+  sender_id  BIGINT,           -- Etsy user id of the sender (for direction backfill)
   sent_at    TIMESTAMPTZ,
   has_text   BOOLEAN,
   PRIMARY KEY (shop_id, thread_id, message_id)

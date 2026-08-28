@@ -85,7 +85,7 @@ CREATE TABLE message_threads (
   PRIMARY KEY (shop_id, thread_id)
 );
 CREATE TABLE messages (
-  shop_id BIGINT, thread_id TEXT, message_id TEXT, direction TEXT,
+  shop_id BIGINT, thread_id TEXT, message_id TEXT, direction TEXT, sender_id BIGINT,
   sent_at TIMESTAMPTZ, has_text BOOLEAN,
   PRIMARY KEY (shop_id, thread_id, message_id)
 );

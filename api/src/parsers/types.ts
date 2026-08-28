@@ -91,6 +91,7 @@ export interface MessageThreadRow {
 export interface MessageRow {
   messageId: string;
   direction: "in" | "out" | null;
+  senderId: number | null;
   sentAt: string | null;
   hasText: boolean;
 }
