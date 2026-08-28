@@ -90,11 +90,19 @@ async function main() {
   const page = await ctx.newPage();
   await page.goto(base + "/page", { waitUntil: "load" });
   await page.waitForFunction(() => document.title === "done", { timeout: 15000 });
-  await page.waitForTimeout(1500);
 
-  const captures = await sw.evaluate(
-    () => new Promise((res) => chrome.storage.local.get("recent_captures", (d) => res(d.recent_captures || [])))
-  );
+  // Poll until both captures have been received + persisted by the SW (avoids
+  // a fixed-wait flake if the SW is briefly slow to process the messages).
+  const read = () =>
+    sw.evaluate(
+      () => new Promise((res) => chrome.storage.local.get("recent_captures", (d) => res(d.recent_captures || [])))
+    );
+  let captures = [];
+  for (let i = 0; i < 30; i++) {
+    captures = await read();
+    if (captures.some((c) => c.captureType === "stats") && captures.some((c) => c.captureType === "listing")) break;
+    await page.waitForTimeout(300);
+  }
   await ctx.close();
   server.close();
 

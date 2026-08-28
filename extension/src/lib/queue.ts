@@ -5,6 +5,7 @@
 // queue stays empty and Phase 1 remains local-only.
 import type { ClassifiedRecord } from "./types.js";
 import { canForward, getSettings, type Settings } from "./settings.js";
+import { runExclusive } from "./lock.js";
 
 const KEY = "outbound_queue";
 const MAX_QUEUE = 5000; // hard cap so a long outage can't exhaust storage
@@ -26,10 +27,12 @@ async function write(items: QueueItem[]): Promise<void> {
 }
 
 export async function enqueue(record: ClassifiedRecord): Promise<void> {
-  const items = await read();
-  items.push({ record, attempts: 0 });
-  if (items.length > MAX_QUEUE) items.splice(0, items.length - MAX_QUEUE);
-  await write(items);
+  await runExclusive(async () => {
+    const items = await read();
+    items.push({ record, attempts: 0 });
+    if (items.length > MAX_QUEUE) items.splice(0, items.length - MAX_QUEUE);
+    await write(items);
+  });
 }
 
 export async function queueSize(): Promise<number> {
@@ -60,33 +63,47 @@ async function postBatch(settings: Settings, records: ClassifiedRecord[]): Promi
   }
 }
 
+let flushing = false;
+
 /**
  * Attempt to flush one batch. Returns true if there may be more work queued.
- * Called from the background alarm; failures increment attempts and remain
- * queued until MAX_ATTEMPTS, giving exponential-ish backoff via alarm cadence.
+ * Called from the background alarm and after each enqueue; failures increment
+ * attempts and remain queued until MAX_ATTEMPTS (backoff via the alarm cadence).
+ *
+ * The network POST runs OUTSIDE the storage lock, and sent items are removed by
+ * dedup_key (not index), so captures enqueued during the POST are never lost. A
+ * re-entrancy guard prevents two overlapping flushes from double-posting.
  */
 export async function flush(): Promise<boolean> {
   const settings = await getSettings();
   if (!canForward(settings)) return false;
+  if (flushing) return false;
+  flushing = true;
+  try {
+    const batch = await runExclusive(async () => (await read()).slice(0, BATCH_SIZE));
+    if (batch.length === 0) return false;
 
-  const items = await read();
-  if (items.length === 0) return false;
+    const ok = await postBatch(settings, batch.map((i) => i.record));
+    const sentKeys = new Set(batch.map((i) => i.record.dedupKey));
 
-  const batch = items.slice(0, BATCH_SIZE);
-  const ok = await postBatch(settings, batch.map((i) => i.record));
-
-  if (ok) {
-    await write(items.slice(batch.length));
-    return items.length > batch.length;
+    return await runExclusive(async () => {
+      const items = await read();
+      if (ok) {
+        const remaining = items.filter((i) => !sentKeys.has(i.record.dedupKey));
+        await write(remaining);
+        return remaining.length > 0;
+      }
+      // Failed: bump attempts on the batch's items, drop those that exhausted retries.
+      const updated = items.map((i) =>
+        sentKeys.has(i.record.dedupKey) ? { ...i, attempts: i.attempts + 1 } : i
+      );
+      const kept = updated.filter((i) => i.attempts < MAX_ATTEMPTS);
+      const dropped = updated.length - kept.length;
+      if (dropped > 0) console.warn(`[queue] dropped ${dropped} records after ${MAX_ATTEMPTS} attempts`);
+      await write(kept);
+      return false; // back off; next alarm retries
+    });
+  } finally {
+    flushing = false;
   }
-
-  // Failed: bump attempts, drop items that exhausted their retries.
-  const remaining = items.map((item, idx) =>
-    idx < batch.length ? { ...item, attempts: item.attempts + 1 } : item
-  );
-  const kept = remaining.filter((i) => i.attempts < MAX_ATTEMPTS);
-  const dropped = remaining.length - kept.length;
-  if (dropped > 0) console.warn(`[queue] dropped ${dropped} records after ${MAX_ATTEMPTS} attempts`);
-  await write(kept);
-  return false; // back off; next alarm retries
 }

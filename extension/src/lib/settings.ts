@@ -19,6 +19,12 @@ export interface Settings {
   chromeProfile: string;
   /** Master switch for forwarding to the API. */
   forwardEnabled: boolean;
+  /**
+   * Discovery mode: record EVERY JSON response's URL (matched or not) into a
+   * local diagnostic buffer, so real Etsy endpoints can be observed on the live
+   * seller panel and folded into endpoints.config.json. Local-only; not forwarded.
+   */
+  captureAll: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   vpsHost: "",
   chromeProfile: "",
   forwardEnabled: false,
+  captureAll: false,
 };
 
 const KEY = "settings";

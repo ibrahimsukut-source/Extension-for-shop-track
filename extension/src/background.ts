@@ -8,7 +8,7 @@ import endpointsConfig from "./config/endpoints.config.json";
 import { classify, compilePatterns } from "./lib/classify.js";
 import { makeDedupKey } from "./lib/dedup.js";
 import { resolveShopId } from "./lib/shop.js";
-import { pushRecent } from "./lib/store.js";
+import { pushAll, pushRecent } from "./lib/store.js";
 import { enqueue, flush, queueSize } from "./lib/queue.js";
 import { canForward, getSettings } from "./lib/settings.js";
 import type {
@@ -35,10 +35,24 @@ function tryParse(body: string): unknown {
 
 async function handleCapture(cap: CapturePayload): Promise<void> {
   const captureType = classify(cap.url, compiled);
+  const settings = await getSettings();
+
+  // Discovery mode: record every JSON response (matched or not) so real Etsy
+  // endpoints can be observed on the live panel and folded into the config.
+  if (settings.captureAll) {
+    await pushAll({
+      url: cap.url,
+      method: cap.method,
+      status: cap.status,
+      captureType: captureType ?? "unmatched",
+      preview: cap.body.slice(0, 200),
+      ts: cap.ts,
+    });
+  }
+
   if (!captureType) return; // config miss → drop as noise (spec 2.1)
 
   const parsed = tryParse(cap.body);
-  const settings = await getSettings();
   const shopId = resolveShopId(cap.url, parsed, settings.shopTag || null);
   const capturedAt = new Date(cap.ts).toISOString();
   const dedupKey = await makeDedupKey({
