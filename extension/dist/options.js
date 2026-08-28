@@ -73,11 +73,32 @@
     fields.forwardEnabled.checked = s.forwardEnabled;
     fields.captureAll.checked = s.captureAll;
   }
+  var displayedRecent = [];
   async function refreshRecent() {
     const recent = await getRecent();
     const size = await queueSize();
+    displayedRecent = recent.slice(-50).reverse();
     $("queueInfo").textContent = `queued for API: ${size}`;
-    $("recent").value = recent.slice(-50).reverse().map((r) => `${r.capturedAt}  ${r.captureType.padEnd(8)} shop=${r.shopId ?? "?"}  ${r.url}`).join("\n");
+    $("recent").value = displayedRecent.map((r) => `${r.capturedAt}  ${r.captureType.padEnd(8)} shop=${r.shopId ?? "?"}  ${r.url}`).join("\n");
+  }
+  function flashCopyStatus(msg) {
+    const el = $("copyStatus");
+    el.textContent = msg;
+    setTimeout(() => el.textContent = "", 2e3);
+  }
+  async function copyBody(body, label) {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(body, null, 2));
+      flashCopyStatus(`copied ${label} \u2713`);
+    } catch {
+      flashCopyStatus("copy failed (select the text manually)");
+    }
+  }
+  async function copyLatest(type) {
+    const recent = await getRecent();
+    const found = [...recent].reverse().find((r) => r.captureType === type);
+    if (!found) return flashCopyStatus(`no ${type} capture yet`);
+    await copyBody(found.body, `${type} (${found.url.slice(0, 40)}\u2026)`);
   }
   async function ensureApiPermission(apiHost) {
     if (!apiHost.trim()) return;
@@ -107,6 +128,15 @@
   $("clear").addEventListener("click", async () => {
     await clearRecent();
     await refreshRecent();
+  });
+  document.querySelectorAll("[data-copytype]").forEach((btn) => {
+    btn.addEventListener("click", () => void copyLatest(btn.getAttribute("data-copytype") ?? ""));
+  });
+  $("recent").addEventListener("click", (e) => {
+    const ta = e.currentTarget;
+    const lineIndex = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+    const rec = displayedRecent[lineIndex];
+    if (rec) void copyBody(rec.body, `${rec.captureType} line`);
   });
   async function refreshAll() {
     const all = await getAll();

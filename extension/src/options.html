@@ -72,6 +72,16 @@
       <button id="refresh">Refresh</button>
       <button id="clear">Clear</button>
       <span id="queueInfo" class="hint"></span>
+      <div class="row" style="flex-wrap: wrap; gap: 0.4rem">
+        <span class="hint">Copy latest full JSON:</span>
+        <button data-copytype="listing">listing</button>
+        <button data-copytype="stats">stats</button>
+        <button data-copytype="ads">ads</button>
+        <button data-copytype="order">order</button>
+        <button data-copytype="messages">messages</button>
+        <span id="copyStatus" class="hint"></span>
+      </div>
+      <p class="hint">Tip: click a line below to copy that capture's full JSON.</p>
       <textarea id="recent" readonly></textarea>
     </fieldset>
 

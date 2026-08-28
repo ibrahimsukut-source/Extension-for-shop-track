@@ -26,15 +26,41 @@ async function load(): Promise<void> {
   fields.captureAll.checked = s.captureAll;
 }
 
+// The list currently shown in the #recent textarea (newest first), so a click
+// on a line can be mapped back to that capture and its full body copied.
+let displayedRecent: Awaited<ReturnType<typeof getRecent>> = [];
+
 async function refreshRecent(): Promise<void> {
   const recent = await getRecent();
   const size = await queueSize();
+  displayedRecent = recent.slice(-50).reverse();
   ($("queueInfo") as HTMLElement).textContent = `queued for API: ${size}`;
-  ($("recent") as HTMLTextAreaElement).value = recent
-    .slice(-50)
-    .reverse()
+  ($("recent") as HTMLTextAreaElement).value = displayedRecent
     .map((r) => `${r.capturedAt}  ${r.captureType.padEnd(8)} shop=${r.shopId ?? "?"}  ${r.url}`)
     .join("\n");
+}
+
+function flashCopyStatus(msg: string): void {
+  const el = $("copyStatus");
+  el.textContent = msg;
+  setTimeout(() => (el.textContent = ""), 2000);
+}
+
+async function copyBody(body: unknown, label: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(body, null, 2));
+    flashCopyStatus(`copied ${label} ✓`);
+  } catch {
+    flashCopyStatus("copy failed (select the text manually)");
+  }
+}
+
+/** Copy the full JSON body of the most recent capture of a given type. */
+async function copyLatest(type: string): Promise<void> {
+  const recent = await getRecent();
+  const found = [...recent].reverse().find((r) => r.captureType === type);
+  if (!found) return flashCopyStatus(`no ${type} capture yet`);
+  await copyBody(found.body, `${type} (${found.url.slice(0, 40)}…)`);
 }
 
 /** Cross-origin fetch from the SW needs host permission for the API host. */
@@ -69,6 +95,19 @@ $("refresh").addEventListener("click", () => void refreshRecent());
 $("clear").addEventListener("click", async () => {
   await clearRecent();
   await refreshRecent();
+});
+
+// "Copy latest <type>" buttons.
+document.querySelectorAll<HTMLButtonElement>("[data-copytype]").forEach((btn) => {
+  btn.addEventListener("click", () => void copyLatest(btn.getAttribute("data-copytype") ?? ""));
+});
+
+// Click a line in the recent list to copy that specific capture's full body.
+($("recent") as HTMLTextAreaElement).addEventListener("click", (e) => {
+  const ta = e.currentTarget as HTMLTextAreaElement;
+  const lineIndex = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+  const rec = displayedRecent[lineIndex];
+  if (rec) void copyBody(rec.body, `${rec.captureType} line`);
 });
 
 /** Build a de-duplicated, sorted summary of observed endpoints for the config. */
