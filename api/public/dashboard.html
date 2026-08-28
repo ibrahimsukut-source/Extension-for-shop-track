@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Etsy Shop Tracker — Live Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #171b21; --panel2: #1d232b; --line: #2a323c;
+    --fg: #e7edf3; --muted: #93a1b0; --accent: #4c8dff; --good: #37c98b; --warn: #e0a33e; --bad: #e5646e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); }
+  header h1 { font-size: 16px; margin: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .muted { color: var(--muted); }
+  main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .tile .v { font-size: 26px; font-weight: 650; }
+  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 18px; overflow: hidden; }
+  section > h2 { font-size: 13px; margin: 0; padding: 11px 16px; border-bottom: 1px solid var(--line); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .body { padding: 6px 0; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 16px; border-bottom: 1px solid var(--panel2); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  .r { text-align: right; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--panel2); }
+  .pill.price_change { color: var(--accent); } .pill.deactivated, .pill.bad { color: var(--bad); }
+  .pill.activated, .pill.good { color: var(--good); } .pill.tag_change, .pill.photo_changed, .pill.title_change { color: var(--warn); }
+  .empty { padding: 16px; color: var(--muted); }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 780px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>Etsy Shop Tracker</h1>
+  <span class="muted" id="status">connecting…</span>
+</header>
+<main>
+  <div class="tiles" id="tiles"></div>
+
+  <section>
+    <h2>Etsy Ads — daily (clicks / impressions / spend / revenue)</h2>
+    <div class="body"><div id="ads" class="empty">no ads data yet</div></div>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Shop stats — daily</h2>
+      <div class="body"><div id="stats" class="empty">no stats yet</div></div>
+    </section>
+    <section>
+      <h2>Derived events (what changed)</h2>
+      <div class="body"><div id="events" class="empty">no events yet</div></div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section>
+      <h2>Top listings by revenue</h2>
+      <div class="body"><div id="top" class="empty">no listing stats yet</div></div>
+    </section>
+    <section>
+      <h2>Recent listing snapshots</h2>
+      <div class="body"><div id="snaps" class="empty">no snapshots yet</div></div>
+    </section>
+  </div>
+
+  <section>
+    <h2>Capture pipeline (raw → parsed)</h2>
+    <div class="body"><div id="captures" class="empty">nothing captured yet</div></div>
+  </section>
+</main>
+
+<script>
+const KEY = new URLSearchParams(location.search).get("key");
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
+const num = (n) => n == null ? "—" : Number(n).toLocaleString();
+const money = (n, c) => n == null ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:2}) + (c ? " " + c : "");
+const date = (s) => s ? String(s).slice(0, 10) : "—";
+const dt = (s) => s ? String(s).replace("T"," ").slice(0,16) : "—";
+
+function table(cols, rows, render) {
+  if (!rows || !rows.length) return null;
+  const head = "<tr>" + cols.map(c => `<th class="${c.r?'r':''}">${esc(c.h)}</th>`).join("") + "</tr>";
+  const body = rows.map(r => "<tr>" + render(r).map((cell,i) => `<td class="${cols[i].r?'r':''}">${cell}</td>`).join("") + "</tr>").join("");
+  const t = document.createElement("table");
+  t.innerHTML = head + body;
+  return t;
+}
+function put(id, el) { const c = $(id); c.innerHTML = ""; if (el) c.appendChild(el); else c.innerHTML = '<div class="empty">—</div>'; }
+
+function render(d) {
+  const t = d.totals;
+  $("tiles").innerHTML = [
+    ["shops", d.shops.length], ["captures", num(t.rawCaptures)], ["parsed", num(t.parsed)],
+    ["unparsed", num(t.unparsed)], ["events", num(t.events)], ["snapshots", num(t.snapshots)],
+    ["msg threads", num(d.messages.threads)],
+  ].map(([k,v]) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+
+  put("ads", table(
+    [{h:"date"},{h:"listing",r:1},{h:"clicks",r:1},{h:"impr.",r:1},{h:"spend",r:1},{h:"orders",r:1},{h:"revenue",r:1}],
+    d.adsDaily,
+    r => [date(r.stat_date), r.listing_id == 0 ? "ALL" : num(r.listing_id), num(r.clicks), num(r.impressions), num(r.spend), num(r.orders_from_ads), num(r.revenue_from_ads)]
+  ));
+
+  put("stats", table(
+    [{h:"date"},{h:"visits",r:1},{h:"views",r:1},{h:"orders",r:1},{h:"revenue",r:1},{h:"conv.",r:1}],
+    d.statsDaily,
+    r => [date(r.stat_date), num(r.visits), num(r.views), num(r.orders), money(r.revenue, r.currency), r.conversion_rate == null ? "—" : (r.conversion_rate*100).toFixed(2)+"%"]
+  ));
+
+  put("events", table(
+    [{h:"when"},{h:"event"},{h:"listing"},{h:"change"}],
+    d.recentEvents,
+    r => [dt(r.occurred_at), `<span class="pill ${esc(r.event_type)}">${esc(r.event_type)}</span>`, esc(r.entity_id),
+          `<code>${esc(JSON.stringify(r.payload?.old))}</code> → <code>${esc(JSON.stringify(r.payload?.new))}</code>`]
+  ));
+
+  put("top", table(
+    [{h:"listing"},{h:"revenue",r:1},{h:"orders",r:1},{h:"visits",r:1}],
+    d.topListings,
+    r => [num(r.listing_id), num(r.revenue), num(r.orders), num(r.visits)]
+  ));
+
+  put("snaps", table(
+    [{h:"when"},{h:"listing"},{h:"state"},{h:"price",r:1},{h:"imgs",r:1}],
+    d.recentSnapshots,
+    r => [dt(r.captured_at), num(r.listing_id), `<span class="pill ${r.state==='active'?'good':(r.state==='inactive'?'bad':'')}">${esc(r.state)}</span>`, num(r.price), num(r.num_images)]
+  ));
+
+  put("captures", table(
+    [{h:"type"},{h:"raw",r:1},{h:"parsed",r:1}],
+    d.captureTypes,
+    r => [esc(r.capture_type), num(r.n), num(r.parsed)]
+  ));
+}
+
+async function tick() {
+  try {
+    const res = await fetch("/dashboard/data" + (KEY ? "?key=" + encodeURIComponent(KEY) : ""));
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    render(d);
+    $("dot").style.background = "var(--good)";
+    $("status").textContent = "live · updated " + new Date(d.generatedAt).toLocaleTimeString();
+  } catch (e) {
+    $("dot").style.background = "var(--bad)";
+    $("status").textContent = "disconnected (" + e.message + ") — is the API running?";
+  }
+}
+tick();
+setInterval(tick, 4000);
+</script>
+</body>
+</html>

@@ -5,7 +5,7 @@
   "description": "Captures Etsy internal JSON API responses (stats, messages, ads, listings, orders) for centralized multi-shop analytics.",
   "permissions": ["storage", "alarms"],
   "host_permissions": ["https://www.etsy.com/*"],
-  "optional_host_permissions": ["https://*/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

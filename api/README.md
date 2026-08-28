@@ -7,6 +7,8 @@ captured data into PostgreSQL. Node.js (TypeScript, ESM) + Fastify + Zod + `pg`.
 
 | Method & path      | Body                              | Purpose |
 |--------------------|-----------------------------------|---------|
+| `GET  /`           | —                                 | Live read-only dashboard (HTML) |
+| `GET  /dashboard/data` | —                             | Dashboard JSON (gated by `DASHBOARD_KEY` when set) |
 | `GET  /health`     | —                                 | Liveness (open, no auth) |
 | `POST /ingest/http`| `{ records: ClassifiedRecord[] }` | Raw captured internal responses from the extension / sweeper |
 | `POST /ingest/event`| `{ events: EventInput[] }`       | DOM / derived action events |

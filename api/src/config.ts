@@ -9,6 +9,10 @@ export interface Config {
   tokenToShop: Map<string, string>;
   /** Max records accepted in a single ingest batch. */
   maxBatch: number;
+  /** Run the parse job automatically after each ingest (local/live demo). */
+  autoParse: boolean;
+  /** Optional key gating the read-only dashboard; empty = open (local dev). */
+  dashboardKey: string;
 }
 
 /**
@@ -49,5 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl,
     tokenToShop: parseTokens(env.INGEST_TOKENS),
     maxBatch: Number(env.MAX_BATCH ?? 500),
+    autoParse: /^(1|true|yes|on)$/i.test(env.AUTO_PARSE ?? ""),
+    dashboardKey: env.DASHBOARD_KEY ?? "",
   };
 }

@@ -1,10 +1,18 @@
 // Fastify app factory. Auth (per-VPS Bearer token) + the three ingest routes.
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import type { Config } from "./config.js";
 import type { Pool } from "./repository.js";
 import { ingestApi, ingestEvents, ingestHttp } from "./service.js";
 import { ingestApiBody, ingestEventBody, ingestHttpBody } from "./schemas.js";
+import { getDashboardData } from "./dashboard_repo.js";
+import { scheduleParse } from "./parse/scheduler.js";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const DASHBOARD_HTML = readFileSync(path.resolve(here, "../public/dashboard.html"), "utf8");
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -32,6 +40,16 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
 
   // Unauthenticated liveness probe.
   app.get("/health", async () => ({ ok: true }));
+
+  // ── Local dashboard (read-only). Gated by DASHBOARD_KEY when set. ─────────
+  app.get("/", async (_req, reply) => reply.type("text/html").send(DASHBOARD_HTML));
+  app.get("/dashboard/data", async (request, reply) => {
+    if (config.dashboardKey) {
+      const key = (request.query as { key?: string } | undefined)?.key;
+      if (key !== config.dashboardKey) return reply.code(401).send({ error: "unauthorized" });
+    }
+    return reply.send(await getDashboardData(pool));
+  });
 
   // Auth for every /ingest/* route: resolve token -> shop_tag (spec §9).
   app.addHook("preHandler", async (request, reply) => {
@@ -62,6 +80,7 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
     if (!parsed.success) return badRequest(reply, parsed.error);
     if (!guardBatchSize(parsed.data.records.length, reply)) return reply;
     const result = await ingestHttp(pool, request.shopTag!, parsed.data.records);
+    if (config.autoParse) scheduleParse(pool);
     return reply.code(202).send(result);
   });
 
@@ -78,6 +97,7 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
     if (!parsed.success) return badRequest(reply, parsed.error);
     if (!guardBatchSize(parsed.data.records.length, reply)) return reply;
     const result = await ingestApi(pool, request.shopTag!, parsed.data.records);
+    if (config.autoParse) scheduleParse(pool);
     return reply.code(202).send(result);
   });
 

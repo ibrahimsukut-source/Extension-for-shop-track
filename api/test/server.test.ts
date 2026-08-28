@@ -4,7 +4,7 @@ import { makeTestPool } from "./helpers.js";
 import { buildServer } from "../src/server.js";
 import { parseTokens, type Config } from "../src/config.js";
 
-function makeApp() {
+function makeApp(over: Partial<Config> = {}) {
   const pool = makeTestPool();
   const config: Config = {
     host: "127.0.0.1",
@@ -12,6 +12,9 @@ function makeApp() {
     databaseUrl: "unused",
     tokenToShop: parseTokens('{"shop-a":"tok_secret_123456"}'),
     maxBatch: 3,
+    autoParse: false,
+    dashboardKey: "",
+    ...over,
   };
   return { app: buildServer({ pool, config }), pool };
 }
@@ -30,6 +33,20 @@ test("GET /health is open", async () => {
   const res = await app.inject({ method: "GET", url: "/health" });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json(), { ok: true });
+});
+
+test("GET / serves the dashboard HTML", async () => {
+  const { app } = makeApp();
+  const res = await app.inject({ method: "GET", url: "/" });
+  assert.equal(res.statusCode, 200);
+  assert.match(res.headers["content-type"] ?? "", /text\/html/);
+  assert.match(res.body, /Etsy Shop Tracker/);
+});
+
+test("GET /dashboard/data is gated when DASHBOARD_KEY is set", async () => {
+  const { app } = makeApp({ dashboardKey: "s3cret" });
+  assert.equal((await app.inject({ method: "GET", url: "/dashboard/data" })).statusCode, 401);
+  assert.equal((await app.inject({ method: "GET", url: "/dashboard/data?key=wrong" })).statusCode, 401);
 });
 
 test("POST /ingest/http rejects missing token with 401", async () => {
