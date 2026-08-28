@@ -46,7 +46,12 @@ export function parseTokens(raw: string | undefined): Map<string, string> {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const databaseUrl = env.DATABASE_URL ?? "";
-  if (!databaseUrl) throw new Error("DATABASE_URL is required");
+  if (!databaseUrl) {
+    throw new Error(
+      "DATABASE_URL is required. Copy api/.env.example to api/.env and set it, " +
+        "then start Postgres (e.g. `docker compose up -d`) and run `npm run migrate`."
+    );
+  }
   return {
     host: env.HOST ?? "0.0.0.0",
     port: Number(env.PORT ?? 8080),

@@ -53,6 +53,27 @@ zincirinden geçer ve **dashboard birkaç saniye içinde güncellenir**:
 - **Top listings / snapshots** — ürün performansı ve durum geçmişi
 - **Capture pipeline** — ham → parse edilen sayıları
 
+## Açılmıyorsa (sorun giderme)
+
+`http://localhost:8080` açılmıyorsa sırayla kontrol et:
+
+- **API çalışıyor mu?** `npm run dev` çalışan bir terminalde durmalı. Kapanıp
+  hata veriyorsa mesajı oku:
+  - `DATABASE_URL is required` → `api/.env` yok ya da boş. `cp .env.example .env`
+    yaptın mı? (`.env` artık otomatik yükleniyor, ayrıca export gerekmez.)
+  - `ECONNREFUSED ... 5432` → PostgreSQL çalışmıyor. `docker compose up -d` (veya
+    kendi Postgres'in) ayakta mı? `.env`'deki `DATABASE_URL` doğru mu?
+- **migrate koştu mu?** İlk kez `npm run migrate` gerekiyor (tabloları kurar).
+- **Port dolu mu?** 8080 başka bir şeyde ise `.env`'de `PORT=8081` yapıp
+  `http://localhost:8081` aç.
+- **Docker yok mu?** Docker kurmak istemiyorsan yerel bir PostgreSQL kur ve
+  `DATABASE_URL`'i ona göre yaz; gerisi aynı.
+- Sadece sayfa açılıp tablolar “disconnected” diyorsa: API ayakta ama DB'ye
+  bağlanamıyor → yine Postgres/`DATABASE_URL` kontrolü.
+
+> Not: Bu sistem **senin makinende** çalışır; internette hazır bir adres yoktur.
+> `npm run dev` çalışırken tarayıcıda `http://localhost:8080` açılır.
+
 ## Notlar
 - Bu panel **salt-okunur** ve yereldir. İnternete açacaksan `.env`'de
   `DASHBOARD_KEY=...` ver ve paneli `http://host:8080/?key=...` ile aç.

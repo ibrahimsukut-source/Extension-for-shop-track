@@ -1,9 +1,12 @@
 // Parse job entrypoint: drains unparsed raw_captures into the normalized tables
 // and derives snapshot-diff events. Run on a schedule (cron / BullMQ, spec §8):
 //   npm run parse
+import { loadDotEnv } from "./env.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db.js";
 import { parseAll } from "./parse/runner.js";
+
+loadDotEnv();
 
 async function main() {
   const config = loadConfig();

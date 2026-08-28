@@ -1,7 +1,10 @@
 // Runtime entrypoint: load config, connect to Postgres, serve.
+import { loadDotEnv } from "./env.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db.js";
 import { buildServer } from "./server.js";
+
+loadDotEnv();
 
 async function main() {
   const config = loadConfig();
