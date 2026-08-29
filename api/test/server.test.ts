@@ -50,6 +50,30 @@ test("GET /dashboard/data is gated when DASHBOARD_KEY is set", async () => {
   assert.equal((await app.inject({ method: "GET", url: "/dashboard/data?key=wrong" })).statusCode, 401);
 });
 
+test("CORS: OPTIONS preflight to /ingest/http returns 204 without auth", async () => {
+  const { app } = makeApp();
+  const res = await app.inject({
+    method: "OPTIONS",
+    url: "/ingest/http",
+    headers: { origin: "chrome-extension://abc", "access-control-request-method": "POST" },
+  });
+  assert.equal(res.statusCode, 204);
+  assert.equal(res.headers["access-control-allow-origin"], "chrome-extension://abc");
+  assert.match(String(res.headers["access-control-allow-headers"]), /authorization/i);
+});
+
+test("CORS: a real POST carries the allow-origin header", async () => {
+  const { app } = makeApp();
+  const res = await app.inject({
+    method: "POST",
+    url: "/ingest/http",
+    headers: { authorization: "Bearer tok_secret_123456", origin: "https://www.etsy.com" },
+    payload: { records: [validRecord] },
+  });
+  assert.equal(res.statusCode, 202);
+  assert.equal(res.headers["access-control-allow-origin"], "https://www.etsy.com");
+});
+
 test("POST /ingest/http rejects missing token with 401", async () => {
   const { app } = makeApp();
   const res = await app.inject({

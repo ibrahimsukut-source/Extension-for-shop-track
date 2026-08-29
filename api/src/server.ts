@@ -38,6 +38,19 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
     bodyLimit: 8 * 1024 * 1024, // internal API bodies can be large
   });
 
+  // CORS: the extension's service worker forwards cross-origin (from
+  // chrome-extension:// or https://www.etsy.com) to this local API. With
+  // non-simple headers (Authorization + application/json) the browser sends a
+  // preflight OPTIONS, which must succeed WITHOUT auth — otherwise the real POST
+  // is never made. Runs before the auth preHandler and answers preflight itself.
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header("access-control-allow-origin", request.headers.origin ?? "*");
+    reply.header("access-control-allow-methods", "GET, POST, OPTIONS");
+    reply.header("access-control-allow-headers", "authorization, content-type");
+    reply.header("access-control-max-age", "86400");
+    if (request.method === "OPTIONS") return reply.code(204).send();
+  });
+
   // Unauthenticated liveness probe.
   app.get("/health", async () => ({ ok: true }));
 
