@@ -14,6 +14,7 @@ function makeApp(over: Partial<Config> = {}) {
     maxBatch: 3,
     autoParse: false,
     dashboardKey: "",
+    usingDefaultToken: false,
     ...over,
   };
   return { app: buildServer({ pool, config }), pool };

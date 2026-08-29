@@ -14,6 +14,10 @@ async function main() {
   if (isMemory(config.databaseUrl)) {
     app.log.warn("Using in-memory database (pg-mem) — data is NOT persisted. Set DATABASE_URL for a real Postgres.");
   }
+  if (config.usingDefaultToken) {
+    const [[token, shopTag]] = config.tokenToShop;
+    app.log.warn(`No INGEST_TOKENS set — using default dev token. In the extension set: shop tag "${shopTag}", token "${token}".`);
+  }
 
   const shutdown = async (signal: string) => {
     app.log.info(`${signal} received, shutting down`);

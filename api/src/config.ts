@@ -13,7 +13,14 @@ export interface Config {
   autoParse: boolean;
   /** Optional key gating the read-only dashboard; empty = open (local dev). */
   dashboardKey: string;
+  /** True when no INGEST_TOKENS were provided and the built-in dev token is used. */
+  usingDefaultToken: boolean;
 }
+
+/** Zero-config local default so the extension can forward without an .env.
+ *  Matches the values documented in the extension options / docs. */
+export const DEFAULT_DEV_TOKEN = "tok_replace_me_0123456789abcdef";
+export const DEFAULT_DEV_SHOP_TAG = "my-shop-01";
 
 /**
  * Parse INGEST_TOKENS. Accepts a JSON object mapping shop_tag -> token, e.g.
@@ -49,13 +56,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // so `npm run dev` works with no Docker/Postgres. Set a postgres:// URL for
   // a real, persistent database.
   const databaseUrl = (env.DATABASE_URL ?? "").trim() || "memory";
+
+  // Zero-config: if no INGEST_TOKENS are provided, accept the built-in dev token
+  // so the extension can forward to a fresh local server without an .env.
+  let tokenToShop = parseTokens(env.INGEST_TOKENS);
+  const usingDefaultToken = tokenToShop.size === 0;
+  if (usingDefaultToken) tokenToShop = new Map([[DEFAULT_DEV_TOKEN, DEFAULT_DEV_SHOP_TAG]]);
+
   return {
     host: env.HOST ?? "0.0.0.0",
     port: Number(env.PORT ?? 8080),
     databaseUrl,
-    tokenToShop: parseTokens(env.INGEST_TOKENS),
+    tokenToShop,
     maxBatch: Number(env.MAX_BATCH ?? 500),
-    autoParse: /^(1|true|yes|on)$/i.test(env.AUTO_PARSE ?? ""),
+    // On by default so the local dashboard updates live; disable explicitly.
+    autoParse: !/^(0|false|no|off)$/i.test(env.AUTO_PARSE ?? ""),
     dashboardKey: env.DASHBOARD_KEY ?? "",
+    usingDefaultToken,
   };
 }
