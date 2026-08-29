@@ -176,7 +176,12 @@ export async function upsertMessageThread(q: Queryable, shopId: number, t: Messa
      VALUES ($1,$2,$3,$4)
      ON CONFLICT (shop_id, thread_id) DO UPDATE SET
        buyer_hash=COALESCE(EXCLUDED.buyer_hash, message_threads.buyer_hash),
-       last_message_at=GREATEST(message_threads.last_message_at, EXCLUDED.last_message_at)`,
+       last_message_at=CASE
+         WHEN message_threads.last_message_at IS NULL THEN EXCLUDED.last_message_at
+         WHEN EXCLUDED.last_message_at IS NULL THEN message_threads.last_message_at
+         WHEN EXCLUDED.last_message_at > message_threads.last_message_at THEN EXCLUDED.last_message_at
+         ELSE message_threads.last_message_at
+       END`,
     [shopId, t.threadId, t.buyerHash, t.lastMessageAt]
   );
   for (const m of t.messages) await upsertMessage(q, shopId, t.threadId, m);

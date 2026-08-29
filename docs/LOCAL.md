@@ -3,25 +3,28 @@
 Amaç: Etsy panelinde gezerken verinin **anında** yerel bir panele düşmesini
 görmek. Adımlar (tek makinede):
 
-## 1. Veritabanı + API'yi başlat
+## 1. API'yi başlat (Docker/Postgres GEREKMEZ)
 
-Docker varsa en kolayı:
+En kolay yol — **hiçbir şey kurmadan**, bellek-içi veritabanıyla:
 
 ```bash
 cd api
-cp .env.example .env      # AUTO_PARSE=true zaten açık; INGEST_TOKENS içindeki token'ı not al
-docker compose up -d      # PostgreSQL
 npm install
-npm run migrate           # tabloları kurar
-npm run dev               # API + canlı dashboard  → http://localhost:8080
+npm run dev        # API + canlı dashboard → http://localhost:8080
 ```
 
-Docker yoksa: `.env` içindeki `DATABASE_URL`'i kendi Postgres'ine çevir, aynı
-`migrate` + `dev` adımlarını çalıştır.
+Bu kadar. `DATABASE_URL` verilmezse sistem **bellek-içi** (in-memory) bir
+veritabanı kullanır — Docker/PostgreSQL kurmana gerek yok. Tek uyarı: sunucuyu
+kapatınca veri sıfırlanır (canlı test için ideal).
 
-`.env` içindeki **INGEST_TOKENS** şuna benzer:
-`{"my-shop-01":"tok_....."}` — buradaki **shop_tag** ve **token**'ı birazdan
-eklentiye gireceğiz.
+Varsayılan giriş token'ı `my-shop-01` mağazası için
+`tok_replace_me_0123456789abcdef` (kod içinde). Kendi token'ını vermek istersen
+`cp .env.example .env` yapıp `INGEST_TOKENS`'i düzenle — `.env` otomatik yüklenir.
+
+**Verinin kalıcı olmasını istersen** (opsiyonel): gerçek bir PostgreSQL kur
+(ör. Mac'te [Postgres.app](https://postgresapp.com) — indir, aç, Start), sonra
+`cp .env.example .env` yapıp `DATABASE_URL`'i ona çevir ve bir kez
+`npm run migrate` çalıştır.
 
 ## 2. Dashboard'u aç
 
@@ -34,9 +37,10 @@ yoksa tablolar boştur — birazdan dolacak.
 1. Eklentiyi güncel `extension/dist` ile yükle/yenile (manifest'e `localhost`
    izni eklendi).
 2. Eklenti → **Options**:
-   - **Shop tag**: `.env`'deki shop_tag (ör. `my-shop-01`)
+   - **Shop tag**: `my-shop-01` (varsayılan; `.env` kullanıyorsan oradaki)
    - **Ingestion API host**: `http://localhost:8080`
-   - **Bearer token**: `.env`'deki o mağazanın token'ı
+   - **Bearer token**: `tok_replace_me_0123456789abcdef` (varsayılan;
+     `.env` kullanıyorsan oradaki token)
    - **Enable forwarding** kutusunu işaretle → **Save**
    - (Kaydederken Chrome `localhost` için izin isteyebilir → izin ver.)
 
@@ -57,22 +61,19 @@ zincirinden geçer ve **dashboard birkaç saniye içinde güncellenir**:
 
 `http://localhost:8080` açılmıyorsa sırayla kontrol et:
 
-- **API çalışıyor mu?** `npm run dev` çalışan bir terminalde durmalı. Kapanıp
-  hata veriyorsa mesajı oku:
-  - `DATABASE_URL is required` → `api/.env` yok ya da boş. `cp .env.example .env`
-    yaptın mı? (`.env` artık otomatik yükleniyor, ayrıca export gerekmez.)
-  - `ECONNREFUSED ... 5432` → PostgreSQL çalışmıyor. `docker compose up -d` (veya
-    kendi Postgres'in) ayakta mı? `.env`'deki `DATABASE_URL` doğru mu?
-- **migrate koştu mu?** İlk kez `npm run migrate` gerekiyor (tabloları kurar).
-- **Port dolu mu?** 8080 başka bir şeyde ise `.env`'de `PORT=8081` yapıp
+- **`npm install` yaptın mı?** `tsx: command not found` görürsen yapmamışsındır.
+  `cd api && npm install`.
+- **Doğru klasörde misin?** Terminalde `ls` (Mac) çıktısında `package.json`,
+  `src`, `public` görünmeli. Görünmüyorsa `cd .../Extension-.../api`.
+- **API çalışıyor mu?** `npm run dev` çalışan terminalde AÇIK kalmalı; loglar
+  akmalı. Kapanıp hata veriyorsa o satırı bana yolla.
+- **Port dolu mu?** 8080 başka bir şeyde ise `PORT=8081 npm run dev` yapıp
   `http://localhost:8081` aç.
-- **Docker yok mu?** Docker kurmak istemiyorsan yerel bir PostgreSQL kur ve
-  `DATABASE_URL`'i ona göre yaz; gerisi aynı.
-- Sadece sayfa açılıp tablolar “disconnected” diyorsa: API ayakta ama DB'ye
-  bağlanamıyor → yine Postgres/`DATABASE_URL` kontrolü.
 
-> Not: Bu sistem **senin makinende** çalışır; internette hazır bir adres yoktur.
-> `npm run dev` çalışırken tarayıcıda `http://localhost:8080` açılır.
+> Not: Artık **Docker/Postgres gerekmiyor** — `DATABASE_URL` verilmezse
+> bellek-içi veritabanı kullanılır. Bu sistem **senin makinende** çalışır;
+> internette hazır bir adres yoktur. `npm run dev` çalışırken
+> `http://localhost:8080` açılır.
 
 ## Notlar
 - Bu panel **salt-okunur** ve yereldir. İnternete açacaksan `.env`'de

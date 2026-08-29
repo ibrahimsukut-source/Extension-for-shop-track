@@ -45,13 +45,10 @@ export function parseTokens(raw: string | undefined): Map<string, string> {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const databaseUrl = env.DATABASE_URL ?? "";
-  if (!databaseUrl) {
-    throw new Error(
-      "DATABASE_URL is required. Copy api/.env.example to api/.env and set it, " +
-        "then start Postgres (e.g. `docker compose up -d`) and run `npm run migrate`."
-    );
-  }
+  // Empty DATABASE_URL selects the zero-install in-memory database (pg-mem),
+  // so `npm run dev` works with no Docker/Postgres. Set a postgres:// URL for
+  // a real, persistent database.
+  const databaseUrl = (env.DATABASE_URL ?? "").trim() || "memory";
   return {
     host: env.HOST ?? "0.0.0.0",
     port: Number(env.PORT ?? 8080),

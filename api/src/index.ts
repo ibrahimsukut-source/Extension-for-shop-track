@@ -1,15 +1,19 @@
 // Runtime entrypoint: load config, connect to Postgres, serve.
 import { loadDotEnv } from "./env.js";
 import { loadConfig } from "./config.js";
-import { createPool } from "./db.js";
+import { createPool, isMemory } from "./db.js";
 import { buildServer } from "./server.js";
 
 loadDotEnv();
 
 async function main() {
   const config = loadConfig();
-  const pool = createPool(config.databaseUrl);
+  const pool = await createPool(config.databaseUrl);
   const app = buildServer({ pool, config });
+
+  if (isMemory(config.databaseUrl)) {
+    app.log.warn("Using in-memory database (pg-mem) — data is NOT persisted. Set DATABASE_URL for a real Postgres.");
+  }
 
   const shutdown = async (signal: string) => {
     app.log.info(`${signal} received, shutting down`);

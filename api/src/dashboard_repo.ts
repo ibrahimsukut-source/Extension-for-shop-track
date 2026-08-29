@@ -20,9 +20,11 @@ export async function getDashboardData(q: Queryable): Promise<DashboardData> {
   const [shops, captureTypes, totalsRaw, totalsEv, totalsSnap, statsDaily, adsDaily, topListings, recentEvents, recentSnapshots, msgThreads, msgMsgs] =
     await Promise.all([
       rows(q, `SELECT id, shop_tag, etsy_shop_id, vps_host FROM shops ORDER BY id`),
-      rows(q, `SELECT capture_type, count(*)::int AS n, count(*) FILTER (WHERE parsed)::int AS parsed
+      rows(q, `SELECT capture_type, count(*)::int AS n,
+                      sum(CASE WHEN parsed THEN 1 ELSE 0 END)::int AS parsed
                FROM raw_captures GROUP BY capture_type ORDER BY n DESC`),
-      rows(q, `SELECT count(*)::int AS n, count(*) FILTER (WHERE parsed)::int AS parsed FROM raw_captures`),
+      rows(q, `SELECT count(*)::int AS n,
+                      sum(CASE WHEN parsed THEN 1 ELSE 0 END)::int AS parsed FROM raw_captures`),
       rows(q, `SELECT count(*)::int AS n FROM events`),
       rows(q, `SELECT count(*)::int AS n FROM listing_snapshots`),
       rows(q, `SELECT stat_date, visits, views, orders, revenue, currency, conversion_rate, traffic_sources
@@ -30,7 +32,7 @@ export async function getDashboardData(q: Queryable): Promise<DashboardData> {
       rows(q, `SELECT stat_date, listing_id, clicks, impressions, spend, orders_from_ads, revenue_from_ads
                FROM ads_daily ORDER BY stat_date DESC, listing_id LIMIT 30`),
       rows(q, `SELECT listing_id, sum(revenue)::numeric AS revenue, sum(orders)::int AS orders, sum(visits)::int AS visits
-               FROM listing_stats_daily GROUP BY listing_id ORDER BY revenue DESC NULLS LAST LIMIT 15`),
+               FROM listing_stats_daily GROUP BY listing_id ORDER BY sum(revenue) DESC LIMIT 15`),
       rows(q, `SELECT event_type, entity_id, occurred_at, origin, payload
                FROM events ORDER BY occurred_at DESC LIMIT 25`),
       rows(q, `SELECT listing_id, captured_at, state, price, num_images, title
