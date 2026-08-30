@@ -6,7 +6,7 @@ import { insertEvent, withTransaction, type Pool, type Queryable } from "../repo
 import { getParser, PARSERS } from "../parsers/index.js";
 import type { ParseOutput } from "../parsers/types.js";
 import { diffSnapshots } from "./diff.js";
-import { detectListingInterventions } from "../analysis/interventions.js";
+import { detectListingInterventions, type Intervention } from "../analysis/interventions.js";
 import { buildMetricTimeseries, countMetricPoints, upsertIntervention } from "../analysis/repository.js";
 import {
   getLatestSnapshotBefore,
@@ -62,6 +62,22 @@ async function applyOutput(
   for (const r of out.adsDaily ?? []) {
     await upsertAdsDaily(q, shopId, r);
     summary.adsDays++;
+  }
+  // Ad on/off toggle -> intervention directly (no snapshot diff needed: the
+  // mutation response itself names the new state). Ad-level taxonomy §4.
+  for (const r of out.adToggles ?? []) {
+    const iv: Intervention = {
+      interventionType: r.isAdvertised ? "etsy_ads_on" : "etsy_ads_off",
+      entityType: "listing",
+      entityId: String(r.listingId),
+      occurredAt: capturedAt,
+      beforeValue: null,
+      afterValue: r.isAdvertised,
+      magnitude: null,
+      source: "interception",
+      confidence: 0.95,
+    };
+    if (await upsertIntervention(q, shopId, iv)) summary.interventions++;
   }
   for (const r of out.orders ?? []) {
     await upsertOrder(q, shopId, r);

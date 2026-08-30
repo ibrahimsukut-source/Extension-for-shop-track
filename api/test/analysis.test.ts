@@ -4,6 +4,7 @@ import { makeTestPool, seedCapture } from "./helpers.js";
 import { parseAll } from "../src/parse/runner.js";
 import { detectListingInterventions } from "../src/analysis/interventions.js";
 import { buildMetricTimeseries } from "../src/analysis/repository.js";
+import { parseAds } from "../src/parsers/ads.js";
 import type { ListingSnapshotRow } from "../src/parsers/types.js";
 import type { PriorSnapshot } from "../src/parse/diff.js";
 
@@ -98,6 +99,31 @@ test("metric_builder: shop stats flow into long-format metric_timeseries", async
   );
   assert.equal(views.rows.length, 1);
   assert.equal(Number(views.rows[0].value), 200);
+});
+
+test("ads parser: real prolist/listings toggle response -> adToggles", () => {
+  // Real OrnamentsPoint capture: POST /prolist/listings response.
+  const out = parseAds({ listings: { "4438707768": false }, countOfAdvertisedListings: 91 }, { shopId: 1, capturedAt: "t" });
+  assert.deepEqual(out.adToggles, [{ listingId: 4438707768, isAdvertised: false }]);
+  assert.equal(out.adsDaily, undefined);
+});
+
+test("runner: ad toggle capture promotes an etsy_ads_off intervention", async () => {
+  const pool = makeTestPool();
+  await seedCapture(pool, {
+    shopId: SHOP, captureType: "ads",
+    body: { listings: { "4438707768": false }, countOfAdvertisedListings: 91 },
+    capturedAt: "2026-08-29T12:00:00.000Z",
+  });
+  const summary = await parseAll(pool);
+  assert.equal(summary.interventions, 1);
+
+  const iv = await pool.query("SELECT intervention_type, entity_id, after_value, source, confidence FROM interventions WHERE entity_id='4438707768'");
+  assert.equal(iv.rows.length, 1);
+  assert.equal(iv.rows[0].intervention_type, "etsy_ads_off");
+  assert.equal(iv.rows[0].after_value, false);
+  assert.equal(iv.rows[0].source, "interception");
+  assert.equal(Number(iv.rows[0].confidence), 0.95);
 });
 
 test("metric_builder: idempotent refresh (rebuild overwrites, no duplicate rows)", async () => {

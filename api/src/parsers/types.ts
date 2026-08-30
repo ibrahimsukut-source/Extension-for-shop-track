@@ -51,6 +51,14 @@ export interface AdsDailyRow {
   revenueFromAds: number | null;
 }
 
+// Etsy Ads on/off toggle: POST /prolist/listings echoes the new state per
+// listing id (real shape confirmed on OrnamentsPoint, spec §4 ad-level
+// intervention etsy_ads_on/etsy_ads_off). No daily metric — a state change.
+export interface AdToggleRow {
+  listingId: number;
+  isAdvertised: boolean;
+}
+
 export interface OrderRow {
   receiptId: number;
   orderedAt: string | null;
@@ -101,6 +109,7 @@ export interface ParseOutput {
   listingStatsDaily?: ListingStatsDailyRow[];
   listingSnapshots?: ListingSnapshotRow[];
   adsDaily?: AdsDailyRow[];
+  adToggles?: AdToggleRow[];
   orders?: OrderRow[];
   reviews?: ReviewRow[];
   messageThreads?: MessageThreadRow[];

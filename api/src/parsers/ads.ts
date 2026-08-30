@@ -1,13 +1,25 @@
-// Ads parser -> ads_daily. listing_id = 0 denotes the shop-wide total.
+// Ads parser -> ads_daily (+ ad on/off toggles). listing_id = 0 denotes the
+// shop-wide total.
 //
 // Handles Etsy's real ad-traffic shape { stats: [{clickCount, timestamp}],
 // comparisonStats: [...] } by summing hourly clicks into daily rows (this
 // endpoint gives clicks only; spend/impressions stay null). Also handles a
-// richer per-day entry shape { date, spend, impressions, clicks, ... }.
-import type { AdsDailyRow, Parser } from "./types.js";
+// richer per-day entry shape { date, spend, impressions, clicks, ... }, and
+// the real POST /prolist/listings toggle response
+// { listings: {"<listingId>": boolean}, countOfAdvertisedListings }, which
+// carries no daily metric but is itself an intervention (spec §4 ad-level:
+// etsy_ads_on / etsy_ads_off) — promoted via adToggles.
+import type { AdsDailyRow, AdToggleRow, Parser } from "./types.js";
 import { getArray, isObject, pick, toDateOnly, toInt, toMoney, toStr } from "./util.js";
 
 export const SHOP_TOTAL_LISTING = 0;
+
+/** True for the toggle-response shape: `listings` is an id -> boolean map. */
+function isToggleShape(body: unknown): body is { listings: Record<string, unknown> } {
+  if (!isObject(body) || !isObject(body.listings)) return false;
+  const vals = Object.values(body.listings);
+  return vals.length > 0 && vals.every((v) => typeof v === "boolean");
+}
 
 /** Sum an array of {clickCount, timestamp} into clicks-per-day. */
 function clicksByDay(arr: unknown): Map<string, number> {
@@ -25,6 +37,18 @@ function clicksByDay(arr: unknown): Map<string, number> {
 
 export const parseAds: Parser = (body) => {
   const adsDaily: AdsDailyRow[] = [];
+
+  // Shape 0: ad on/off toggle response — checked first, it's the most specific
+  // shape (a bare id -> boolean map, no stats/entries arrays at all).
+  if (isToggleShape(body)) {
+    const adToggles: AdToggleRow[] = [];
+    for (const [id, v] of Object.entries(body.listings)) {
+      const listingId = toInt(id);
+      if (listingId === null || typeof v !== "boolean") continue;
+      adToggles.push({ listingId, isAdvertised: v });
+    }
+    return { adToggles };
+  }
 
   // Shape 1: ad-traffic click stats. Only `stats` is the current period;
   // `comparisonStats` is the previous period and is intentionally ignored here.
