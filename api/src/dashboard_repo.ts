@@ -1,6 +1,6 @@
 // Read-only aggregate queries powering the local dashboard (/dashboard/data).
 import type { Queryable } from "./repository.js";
-import { getInterventionLedger } from "./analysis/repository.js";
+import { getEffectCards, getInterventionLedger } from "./analysis/repository.js";
 
 export interface DashboardData {
   generatedAt: string;
@@ -14,6 +14,7 @@ export interface DashboardData {
     snapshots: number;
     interventions: number;
     metricPoints: number;
+    effects: number;
   };
   statsDaily: any[];
   adsDaily: any[];
@@ -21,13 +22,14 @@ export interface DashboardData {
   recentEvents: any[];
   recentSnapshots: any[];
   interventions: any[];
+  effects: any[];
   messages: { threads: number; messages: number };
 }
 
 const rows = async (q: Queryable, sql: string, params: unknown[] = []) => (await q.query(sql, params)).rows;
 
 export async function getDashboardData(q: Queryable): Promise<DashboardData> {
-  const [shops, captureTypes, totalsRaw, totalsEv, totalsSnap, totalsIv, totalsMt, statsDaily, adsDaily, topListings, recentEvents, recentSnapshots, interventions, msgThreads, msgMsgs] =
+  const [shops, captureTypes, totalsRaw, totalsEv, totalsSnap, totalsIv, totalsMt, statsDaily, adsDaily, topListings, recentEvents, recentSnapshots, interventions, effects, totalsEf, msgThreads, msgMsgs] =
     await Promise.all([
       rows(q, `SELECT id, shop_tag, etsy_shop_id, vps_host FROM shops ORDER BY id`),
       rows(q, `SELECT capture_type, count(*)::int AS n,
@@ -50,6 +52,8 @@ export async function getDashboardData(q: Queryable): Promise<DashboardData> {
       rows(q, `SELECT listing_id, captured_at, state, price, num_images, title
                FROM listing_snapshots ORDER BY captured_at DESC LIMIT 20`),
       getInterventionLedger(q, 40),
+      getEffectCards(q, 30),
+      rows(q, `SELECT count(*)::int AS n FROM effects`),
       rows(q, `SELECT count(*)::int AS n FROM message_threads`),
       rows(q, `SELECT count(*)::int AS n FROM messages`),
     ]);
@@ -67,6 +71,7 @@ export async function getDashboardData(q: Queryable): Promise<DashboardData> {
       snapshots: totalsSnap[0]?.n ?? 0,
       interventions: totalsIv[0]?.n ?? 0,
       metricPoints: totalsMt[0]?.n ?? 0,
+      effects: totalsEf[0]?.n ?? 0,
     },
     statsDaily,
     adsDaily,
@@ -74,6 +79,7 @@ export async function getDashboardData(q: Queryable): Promise<DashboardData> {
     recentEvents,
     recentSnapshots,
     interventions,
+    effects,
     messages: { threads: msgThreads[0]?.n ?? 0, messages: msgMsgs[0]?.n ?? 0 },
   };
 }

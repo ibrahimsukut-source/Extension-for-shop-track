@@ -40,6 +40,22 @@
   code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 780px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .effects h2 { color: var(--accent); }
+  .effect-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 14px 16px; }
+  .effect-card { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .effect-card .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .effect-card .entity { color: var(--muted); font-size: 12px; }
+  .effect-card .delta { font-size: 24px; font-weight: 650; margin: 4px 0; }
+  .effect-card .delta.up { color: var(--good); } .effect-card .delta.down { color: var(--bad); }
+  .effect-card .metric-line { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: var(--panel); border: 1px solid var(--line); }
+  .badge.did { color: var(--accent); border-color: var(--accent); }
+  .badge.its { color: var(--muted); }
+  .badge.conf-medium { color: var(--good); border-color: var(--good); }
+  .badge.conf-low { color: var(--warn); border-color: var(--warn); }
+  .caveats { margin: 8px 0 0; padding-left: 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .caveats li { margin-bottom: 2px; }
 </style>
 </head>
 <body>
@@ -54,6 +70,11 @@
   <section class="ledger">
     <h2>Müdahale Defteri — what I did (interventions)</h2>
     <div class="body"><div id="ledger" class="empty">no interventions detected yet — needs ≥2 snapshots of a listing so a change can be diffed</div></div>
+  </section>
+
+  <section class="effects">
+    <h2>Etki Kartları — what happened as a result (effect cards)</h2>
+    <div id="effects" class="empty">no effects computed yet — needs ≥1 intervention with enough before/after metric history (14 days each side)</div>
   </section>
 
   <section>
@@ -116,13 +137,48 @@ function table(cols, rows, render) {
 }
 function put(id, el) { const c = $(id); c.innerHTML = ""; if (el) c.appendChild(el); else c.innerHTML = '<div class="empty">—</div>'; }
 
+// Turkish labels for what a metric name means, for the card's small print.
+const METRIC_LABEL = { views: "görüntülenme", visits: "ziyaret", orders: "sipariş", revenue: "gelir", conversion_rate: "dönüşüm oranı" };
+const ENTITY_LABEL = { listing: "ürün", shop: "mağaza geneli", ad: "reklam", conversation: "mesaj" };
+
+function renderEffects(effects) {
+  const el = $("effects");
+  if (!effects || !effects.length) { el.innerHTML = '<div class="empty">no effects computed yet — needs ≥1 intervention with enough before/after metric history (14 days each side)</div>'; return; }
+  el.innerHTML = '<div class="effect-cards"></div>';
+  const grid = el.querySelector(".effect-cards");
+  for (const r of effects) {
+    const pe = r.point_estimate == null ? null : Number(r.point_estimate);
+    const cls = pe == null ? "" : (pe > 0 ? "up" : (pe < 0 ? "down" : ""));
+    const sign = pe != null && pe > 0 ? "+" : "";
+    const deltaTxt = pe == null ? "—" : sign + pe.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    const entity = r.entity_type === "shop" ? ENTITY_LABEL.shop : `${ENTITY_LABEL[r.entity_type] ?? r.entity_type} #${esc(r.entity_id)}`;
+    const metricLabel = METRIC_LABEL[r.metric] ?? r.metric;
+    const caveats = Array.isArray(r.caveats) ? r.caveats : [];
+    const card = document.createElement("div");
+    card.className = "effect-card";
+    card.innerHTML = `
+      <div class="top">
+        <span class="pill ${esc(r.intervention_type)}">${esc(r.intervention_type)}</span>
+        <span class="badge ${esc(r.method)}">${r.method === "did" ? "DiD · kontrol düzeltmeli" : "ITS · öncesi/sonrası"}</span>
+      </div>
+      <div class="entity">${entity} · ${dt(r.occurred_at)}</div>
+      <div class="delta ${cls}">${deltaTxt}</div>
+      <div class="metric-line">${esc(metricLabel)} · ${esc(r.effect_window)} · <span class="badge conf-${esc(r.confidence_label)}">güven: ${esc(r.confidence_label)}</span></div>
+      <ul class="caveats">${caveats.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+    `;
+    grid.appendChild(card);
+  }
+}
+
 function render(d) {
   const t = d.totals;
   $("tiles").innerHTML = [
-    ["interventions", num(t.interventions)], ["metric points", num(t.metricPoints)],
+    ["interventions", num(t.interventions)], ["effects", num(t.effects)], ["metric points", num(t.metricPoints)],
     ["shops", d.shops.length], ["captures", num(t.rawCaptures)], ["parsed", num(t.parsed)],
     ["snapshots", num(t.snapshots)], ["events", num(t.events)], ["msg threads", num(d.messages.threads)],
   ].map(([k,v]) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+
+  renderEffects(d.effects);
 
   put("ledger", table(
     [{h:"when"},{h:"intervention"},{h:"listing"},{h:"change"},{h:"Δ",r:1},{h:"conf.",r:1}],

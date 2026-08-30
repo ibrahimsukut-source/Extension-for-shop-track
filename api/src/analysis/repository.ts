@@ -114,3 +114,20 @@ export async function getInterventionLedger(q: Queryable, limit = 40): Promise<a
   );
   return res.rows;
 }
+
+/** Most recent computed effects for the dashboard's Effect Cards (§8.2). */
+export async function getEffectCards(q: Queryable, limit = 30): Promise<any[]> {
+  const res = await q.query(
+    `SELECT ef.metric, ef.effect_window, ef.point_estimate, ef.ci_low, ef.ci_high,
+            ef.control_adjusted, ef.confidence_label, ef.caveats, ef.computed_at,
+            x.method, x.entity_id, x.baseline_start, x.baseline_end,
+            iv.intervention_type, iv.occurred_at, iv.entity_type
+       FROM effects ef
+       JOIN experiments x ON x.id = ef.experiment_id
+       JOIN interventions iv ON iv.id = x.intervention_id
+      ORDER BY ef.computed_at DESC, ef.id DESC
+      LIMIT $1`,
+    [limit]
+  );
+  return res.rows;
+}

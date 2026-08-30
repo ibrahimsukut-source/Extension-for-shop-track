@@ -8,6 +8,7 @@ import type { ParseOutput } from "../parsers/types.js";
 import { diffSnapshots } from "./diff.js";
 import { detectListingInterventions, type Intervention } from "../analysis/interventions.js";
 import { buildMetricTimeseries, countMetricPoints, upsertIntervention } from "../analysis/repository.js";
+import { computeEffects } from "../analysis/compute.js";
 import {
   getLatestSnapshotBefore,
   getUnparsedCaptures,
@@ -27,6 +28,7 @@ export interface ParseSummary {
   derivedEvents: number;
   interventions: number;
   metricPoints: number;
+  effects: number;
   statsDays: number;
   adsDays: number;
   orders: number;
@@ -40,6 +42,7 @@ const emptySummary = (): ParseSummary => ({
   derivedEvents: 0,
   interventions: 0,
   metricPoints: 0,
+  effects: 0,
   statsDays: 0,
   adsDays: 0,
   orders: 0,
@@ -189,5 +192,13 @@ export async function parseAll(pool: Pool, batchSize = 100): Promise<ParseSummar
   // upserted daily tables (idempotent; overwrites values in place).
   await buildMetricTimeseries(pool);
   total.metricPoints = await countMetricPoints(pool);
+
+  // Compute effect cards for every shop's not-yet-estimated interventions.
+  // Idempotent (skips interventions that already have an experiment row), so
+  // safe to run on every pass — cheap when there's nothing new to compute.
+  const shops = await pool.query(`SELECT id FROM shops`);
+  for (const row of shops.rows) {
+    total.effects += await computeEffects(pool, Number(row.id));
+  }
   return total;
 }
