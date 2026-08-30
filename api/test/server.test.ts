@@ -15,6 +15,7 @@ function makeApp(over: Partial<Config> = {}) {
     autoParse: false,
     dashboardKey: "",
     usingDefaultToken: false,
+    anthropicApiKey: "",
     ...over,
   };
   return { app: buildServer({ pool, config }), pool };
@@ -131,4 +132,48 @@ test("POST /ingest/http rejects an oversized batch with 413", async () => {
     payload: { records },
   });
   assert.equal(res.statusCode, 413);
+});
+
+test("GET /analysis/summary is gated when DASHBOARD_KEY is set, works as JSON and Markdown when open", async () => {
+  const { app: gated } = makeApp({ dashboardKey: "s3cret" });
+  assert.equal((await gated.inject({ method: "GET", url: "/analysis/summary" })).statusCode, 401);
+
+  const { app } = makeApp();
+  const json = await app.inject({ method: "GET", url: "/analysis/summary" });
+  assert.equal(json.statusCode, 200);
+  assert.ok(Array.isArray(json.json().shops));
+
+  const md = await app.inject({ method: "GET", url: "/analysis/summary?format=md" });
+  assert.equal(md.statusCode, 200);
+  assert.match(md.headers["content-type"] ?? "", /text\/markdown/);
+  assert.match(md.body, /Etsy Mağaza Analiz Özeti/);
+});
+
+test("GET /analysis/ask/status reports disabled without ANTHROPIC_API_KEY, enabled with one", async () => {
+  const { app: off } = makeApp();
+  assert.deepEqual((await off.inject({ method: "GET", url: "/analysis/ask/status" })).json(), { enabled: false });
+
+  const { app: on } = makeApp({ anthropicApiKey: "sk-ant-fake-for-test" });
+  assert.deepEqual((await on.inject({ method: "GET", url: "/analysis/ask/status" })).json(), { enabled: true });
+});
+
+test("POST /analysis/ask returns enabled:false without a network call when no API key is configured", async () => {
+  const { app } = makeApp();
+  const res = await app.inject({ method: "POST", url: "/analysis/ask", payload: { question: "test?" } });
+  assert.equal(res.statusCode, 200);
+  const body = res.json();
+  assert.equal(body.enabled, false);
+  assert.ok(body.error);
+});
+
+test("POST /analysis/ask rejects an empty question with a validation error", async () => {
+  const { app } = makeApp();
+  const res = await app.inject({ method: "POST", url: "/analysis/ask", payload: { question: "" } });
+  assert.equal(res.statusCode, 400);
+});
+
+test("POST /analysis/ask is gated when DASHBOARD_KEY is set", async () => {
+  const { app } = makeApp({ dashboardKey: "s3cret" });
+  const res = await app.inject({ method: "POST", url: "/analysis/ask", payload: { question: "test?" } });
+  assert.equal(res.statusCode, 401);
 });

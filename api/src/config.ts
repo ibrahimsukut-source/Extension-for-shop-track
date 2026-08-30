@@ -15,6 +15,8 @@ export interface Config {
   dashboardKey: string;
   /** True when no INGEST_TOKENS were provided and the built-in dev token is used. */
   usingDefaultToken: boolean;
+  /** Optional: enables the dashboard's NL question box (spec §9). Empty = disabled. */
+  anthropicApiKey: string;
 }
 
 /** Zero-config local default so the extension can forward without an .env.
@@ -73,5 +75,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     autoParse: !/^(0|false|no|off)$/i.test(env.AUTO_PARSE ?? ""),
     dashboardKey: env.DASHBOARD_KEY ?? "",
     usingDefaultToken,
+    anthropicApiKey: (env.ANTHROPIC_API_KEY ?? "").trim(),
   };
 }

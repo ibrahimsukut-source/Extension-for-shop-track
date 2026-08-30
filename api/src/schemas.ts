@@ -65,3 +65,8 @@ export type ApiRecord = z.infer<typeof apiRecord>;
 export const ingestApiBody = z.object({
   records: z.array(apiRecord).min(1),
 });
+
+// POST /analysis/ask body (spec §9 NL question interface).
+export const askBody = z.object({
+  question: z.string().min(1).max(2000),
+});

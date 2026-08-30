@@ -7,9 +7,10 @@ import path from "node:path";
 import type { Config } from "./config.js";
 import type { Pool } from "./repository.js";
 import { ingestApi, ingestEvents, ingestHttp } from "./service.js";
-import { ingestApiBody, ingestEventBody, ingestHttpBody } from "./schemas.js";
+import { askBody, ingestApiBody, ingestEventBody, ingestHttpBody } from "./schemas.js";
 import { getDashboardData } from "./dashboard_repo.js";
 import { buildAnalysisSummary, toMarkdown } from "./analysis/summary.js";
+import { askEnabled, askQuestion } from "./analysis/ask.js";
 import { scheduleParse } from "./parse/scheduler.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -78,6 +79,28 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
       return reply.type("text/markdown; charset=utf-8").send(toMarkdown(summary));
     }
     return reply.send(summary);
+  });
+
+  // NL question interface (spec §9, "Claude in Claude"). /status lets the
+  // dashboard show/hide the question box without sending a question; the
+  // POST answers using ONLY the structured summary above as context — the
+  // model never sees raw DB access. Same gate as the dashboard.
+  app.get("/analysis/ask/status", async (request, reply) => {
+    if (config.dashboardKey) {
+      const key = (request.query as { key?: string } | undefined)?.key;
+      if (key !== config.dashboardKey) return reply.code(401).send({ error: "unauthorized" });
+    }
+    return reply.send({ enabled: askEnabled(config.anthropicApiKey) });
+  });
+  app.post("/analysis/ask", async (request, reply) => {
+    const query = request.query as { key?: string } | undefined;
+    if (config.dashboardKey && query?.key !== config.dashboardKey) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    const parsed = askBody.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid payload", issues: parsed.error.issues });
+    const result = await askQuestion(pool, config.anthropicApiKey, parsed.data.question);
+    return reply.send(result);
   });
 
   // Auth for every /ingest/* route: resolve token -> shop_tag (spec §9).

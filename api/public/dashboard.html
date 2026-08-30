@@ -80,6 +80,21 @@
     <div id="effects" class="empty">no effects computed yet — needs ≥1 intervention with enough before/after metric history (14 days each side)</div>
   </section>
 
+  <section class="ask">
+    <h2>AI'ya Sor — ask a question about your shop (Claude)</h2>
+    <div class="body">
+      <div class="empty" id="askDisabled" hidden>AI soru-cevap özelliği kapalı. Açmak için <code>.env</code> dosyasına <code>ANTHROPIC_API_KEY</code> ekleyip sunucuyu yeniden başlatın.</div>
+      <div id="askEnabledBox" hidden style="padding:14px 16px;">
+        <textarea id="askInput" rows="2" placeholder="Örn: Fiyat değişikliği gerçekten işe yaradı mı?" style="width:100%;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;resize:vertical;"></textarea>
+        <div style="margin-top:8px;display:flex;gap:10px;align-items:center;">
+          <button id="askBtn" style="background:var(--accent);color:#fff;border:0;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:13px;">Sor</button>
+          <span id="askStatus" class="muted" style="font-size:12px;"></span>
+        </div>
+        <div id="askAnswer" style="margin-top:12px;white-space:pre-wrap;line-height:1.6;font-size:13px;"></div>
+      </div>
+    </div>
+  </section>
+
   <section>
     <h2>Strateji Paneli — müdahale tipi → ortalama etki (event study)</h2>
     <div class="body"><div id="strategy" class="empty">no pooled effects yet</div></div>
@@ -309,6 +324,48 @@ async function tick() {
 }
 tick();
 setInterval(tick, 4000);
+
+// ── AI'ya Sor (spec §9 NL question interface) ───────────────────────────────
+async function initAsk() {
+  try {
+    const res = await fetch("/analysis/ask/status" + (KEY ? "?key=" + encodeURIComponent(KEY) : ""));
+    const data = await res.json();
+    $(data.enabled ? "askEnabledBox" : "askDisabled").hidden = false;
+  } catch (e) {
+    $("askDisabled").hidden = false;
+  }
+}
+async function submitAsk() {
+  const question = $("askInput").value.trim();
+  if (!question) return;
+  const btn = $("askBtn");
+  btn.disabled = true;
+  $("askStatus").textContent = "düşünüyor…";
+  $("askAnswer").textContent = "";
+  try {
+    const res = await fetch("/analysis/ask" + (KEY ? "?key=" + encodeURIComponent(KEY) : ""), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    const data = await res.json();
+    if (data.answer) {
+      $("askAnswer").textContent = data.answer;
+      $("askStatus").textContent = "";
+    } else {
+      $("askStatus").textContent = data.error || "bilinmeyen hata";
+    }
+  } catch (e) {
+    $("askStatus").textContent = "bağlantı hatası: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+$("askBtn").addEventListener("click", submitAsk);
+$("askInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submitAsk();
+});
+initAsk();
 </script>
 </body>
 </html>
