@@ -1,6 +1,8 @@
 // Read-only aggregate queries powering the local dashboard (/dashboard/data).
 import type { Queryable } from "./repository.js";
 import { getEffectCards, getInterventionLedger } from "./analysis/repository.js";
+import { getEventStudy } from "./analysis/event_study.js";
+import { detectAllChangePoints } from "./analysis/shop_level_analyzer.js";
 
 export interface DashboardData {
   generatedAt: string;
@@ -23,6 +25,8 @@ export interface DashboardData {
   recentSnapshots: any[];
   interventions: any[];
   effects: any[];
+  strategyPanel: any[];
+  changePoints: any[];
   messages: { threads: number; messages: number };
 }
 
@@ -58,6 +62,18 @@ export async function getDashboardData(q: Queryable): Promise<DashboardData> {
       rows(q, `SELECT count(*)::int AS n FROM messages`),
     ]);
 
+  // Shop-scoped analyses (event study is shop-agnostic; change points aren't —
+  // a shop's own series shouldn't blend with another shop's), run after the
+  // main batch so `shops` is resolved.
+  const [strategyPanel, changePointsPerShop] = await Promise.all([
+    getEventStudy(q),
+    Promise.all(shops.map(async (s: any) => {
+      const cps = await detectAllChangePoints(q, Number(s.id));
+      return cps.map((cp) => ({ ...cp, shopId: Number(s.id), shopTag: s.shop_tag }));
+    })),
+  ]);
+  const changePoints = changePointsPerShop.flat().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
+
   const raw = totalsRaw[0] ?? { n: 0, parsed: 0 };
   return {
     generatedAt: new Date().toISOString(),
@@ -80,6 +96,8 @@ export async function getDashboardData(q: Queryable): Promise<DashboardData> {
     recentSnapshots,
     interventions,
     effects,
+    strategyPanel,
+    changePoints,
     messages: { threads: msgThreads[0]?.n ?? 0, messages: msgMsgs[0]?.n ?? 0 },
   };
 }

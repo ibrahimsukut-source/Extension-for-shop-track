@@ -78,6 +78,16 @@
   </section>
 
   <section>
+    <h2>Strateji Paneli — müdahale tipi → ortalama etki (event study)</h2>
+    <div class="body"><div id="strategy" class="empty">no pooled effects yet</div></div>
+  </section>
+
+  <section>
+    <h2>Değişim Noktaları — shop-level shifts not tied to any logged intervention</h2>
+    <div class="body"><div id="changepoints" class="empty">no change points detected yet</div></div>
+  </section>
+
+  <section>
     <h2>Etsy Ads — daily (clicks / impressions / spend / revenue)</h2>
     <div class="body"><div id="ads" class="empty">no ads data yet</div></div>
   </section>
@@ -179,6 +189,40 @@ function render(d) {
   ].map(([k,v]) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
 
   renderEffects(d.effects);
+
+  put("strategy", table(
+    [{h:"intervention"},{h:"metric"},{h:"n",r:1},{h:"ort. etki (Δ)",r:1},{h:"std",r:1},{h:"kontrollü",r:1},{h:"medium/low",r:1}],
+    d.strategyPanel,
+    r => {
+      const me = Number(r.meanEffect);
+      const cls = me > 0 ? "up" : (me < 0 ? "down" : "");
+      const sign = me > 0 ? "+" : "";
+      return [
+        `<span class="pill ${esc(r.interventionType)}">${esc(r.interventionType)}</span>`,
+        esc(METRIC_LABEL[r.metric] ?? r.metric),
+        num(r.n),
+        `<span class="mag ${cls}">${sign}${me.toLocaleString(undefined,{maximumFractionDigits:2})}</span>`,
+        r.stdDev == null ? "—" : Number(r.stdDev).toLocaleString(undefined,{maximumFractionDigits:2}),
+        `${r.nControlAdjusted}/${r.n}`,
+        `${r.nMedium}/${r.nLow}`,
+      ];
+    }
+  ));
+
+  put("changepoints", table(
+    [{h:"date"},{h:"shop"},{h:"metric"},{h:"before",r:1},{h:"after",r:1},{h:"Δ%",r:1}],
+    d.changePoints,
+    r => {
+      const relPct = r.relDelta == null ? "—" : (r.relDelta * 100).toFixed(0) + "%";
+      const cls = r.direction === "up" ? "up" : "down";
+      return [
+        date(r.date), esc(r.shopTag ?? r.shopId), esc(METRIC_LABEL[r.metric] ?? r.metric),
+        Number(r.before).toLocaleString(undefined,{maximumFractionDigits:2}),
+        Number(r.after).toLocaleString(undefined,{maximumFractionDigits:2}),
+        `<span class="mag ${cls}">${r.direction === "up" ? "+" : ""}${relPct}</span>`,
+      ];
+    }
+  ));
 
   put("ledger", table(
     [{h:"when"},{h:"intervention"},{h:"listing"},{h:"change"},{h:"Δ",r:1},{h:"conf.",r:1}],
