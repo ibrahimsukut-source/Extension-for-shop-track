@@ -6,6 +6,8 @@ import { insertEvent, withTransaction, type Pool, type Queryable } from "../repo
 import { getParser, PARSERS } from "../parsers/index.js";
 import type { ParseOutput } from "../parsers/types.js";
 import { diffSnapshots } from "./diff.js";
+import { detectListingInterventions } from "../analysis/interventions.js";
+import { buildMetricTimeseries, countMetricPoints, upsertIntervention } from "../analysis/repository.js";
 import {
   getLatestSnapshotBefore,
   getUnparsedCaptures,
@@ -23,6 +25,8 @@ export interface ParseSummary {
   captures: number;
   snapshots: number;
   derivedEvents: number;
+  interventions: number;
+  metricPoints: number;
   statsDays: number;
   adsDays: number;
   orders: number;
@@ -34,6 +38,8 @@ const emptySummary = (): ParseSummary => ({
   captures: 0,
   snapshots: 0,
   derivedEvents: 0,
+  interventions: 0,
+  metricPoints: 0,
   statsDays: 0,
   adsDays: 0,
   orders: 0,
@@ -99,6 +105,11 @@ async function applyOutput(
       });
       if (stored) summary.derivedEvents++;
     }
+
+    // Promote the same diff to first-class interventions for the causal engine.
+    for (const iv of detectListingInterventions(prior, snap, capturedAt)) {
+      if (await upsertIntervention(q, shopId, iv)) summary.interventions++;
+    }
   }
 }
 
@@ -133,6 +144,7 @@ export async function parseAll(pool: Pool, batchSize = 100): Promise<ParseSummar
     total.captures += s.captures;
     total.snapshots += s.snapshots;
     total.derivedEvents += s.derivedEvents;
+    total.interventions += s.interventions;
     total.statsDays += s.statsDays;
     total.adsDays += s.adsDays;
     total.orders += s.orders;
@@ -140,5 +152,10 @@ export async function parseAll(pool: Pool, batchSize = 100): Promise<ParseSummar
     total.messageThreads += s.messageThreads;
     if (s.captures === 0) break;
   }
+
+  // Rebuild the analysis-ready long-format metric series from the freshly
+  // upserted daily tables (idempotent; overwrites values in place).
+  await buildMetricTimeseries(pool);
+  total.metricPoints = await countMetricPoints(pool);
   return total;
 }

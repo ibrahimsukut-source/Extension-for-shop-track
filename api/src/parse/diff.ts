@@ -11,6 +11,7 @@ export interface PriorSnapshot {
   tags: string[] | null;
   numImages: number | null;
   imageHashes: string[] | null;
+  quantity: number | null;
 }
 
 export interface DerivedEvent {

@@ -31,6 +31,7 @@ const prior: PriorSnapshot = {
   tags: ["a", "b"],
   numImages: 2,
   imageHashes: ["h1", "h2"],
+  quantity: 5,
 };
 
 test("no changes -> no events", () => {

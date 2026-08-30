@@ -29,8 +29,12 @@
   tr:last-child td { border-bottom: none; }
   .r { text-align: right; }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--panel2); }
-  .pill.price_change { color: var(--accent); } .pill.deactivated, .pill.bad { color: var(--bad); }
-  .pill.activated, .pill.good { color: var(--good); } .pill.tag_change, .pill.photo_changed, .pill.title_change { color: var(--warn); }
+  .pill.price_change, .pill.price_changed { color: var(--accent); }
+  .pill.deactivated, .pill.listing_deactivated, .pill.bad { color: var(--bad); }
+  .pill.activated, .pill.listing_reactivated, .pill.good { color: var(--good); }
+  .pill.tag_change, .pill.tags_changed, .pill.photo_changed, .pill.title_change, .pill.title_changed, .pill.quantity_changed, .pill.state_changed { color: var(--warn); }
+  .ledger h2 { color: var(--accent); }
+  .mag.up { color: var(--good); } .mag.down { color: var(--bad); }
   .empty { padding: 16px; color: var(--muted); }
   code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -45,6 +49,11 @@
 </header>
 <main>
   <div class="tiles" id="tiles"></div>
+
+  <section class="ledger">
+    <h2>Müdahale Defteri — what I did (interventions)</h2>
+    <div class="body"><div id="ledger" class="empty">no interventions detected yet — needs ≥2 snapshots of a listing so a change can be diffed</div></div>
+  </section>
 
   <section>
     <h2>Etsy Ads — daily (clicks / impressions / spend / revenue)</h2>
@@ -87,6 +96,14 @@ const num = (n) => n == null ? "—" : Number(n).toLocaleString();
 const money = (n, c) => n == null ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:2}) + (c ? " " + c : "");
 const date = (s) => s ? String(s).slice(0, 10) : "—";
 const dt = (s) => s ? String(s).replace("T"," ").slice(0,16) : "—";
+// Compact rendering of an intervention before/after value (scalar, tag array,
+// or a photo {num,hashes} object).
+function ivVal(v) {
+  if (v == null) return "—";
+  if (Array.isArray(v)) return v.length + " tags";
+  if (typeof v === "object") return v.num != null ? v.num + " imgs" : JSON.stringify(v);
+  return String(v);
+}
 
 function table(cols, rows, render) {
   if (!rows || !rows.length) return null;
@@ -101,10 +118,28 @@ function put(id, el) { const c = $(id); c.innerHTML = ""; if (el) c.appendChild(
 function render(d) {
   const t = d.totals;
   $("tiles").innerHTML = [
+    ["interventions", num(t.interventions)], ["metric points", num(t.metricPoints)],
     ["shops", d.shops.length], ["captures", num(t.rawCaptures)], ["parsed", num(t.parsed)],
-    ["unparsed", num(t.unparsed)], ["events", num(t.events)], ["snapshots", num(t.snapshots)],
-    ["msg threads", num(d.messages.threads)],
+    ["snapshots", num(t.snapshots)], ["events", num(t.events)], ["msg threads", num(d.messages.threads)],
   ].map(([k,v]) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+
+  put("ledger", table(
+    [{h:"when"},{h:"intervention"},{h:"listing"},{h:"change"},{h:"Δ",r:1},{h:"conf.",r:1}],
+    d.interventions,
+    r => {
+      const m = r.magnitude == null ? "" : Number(r.magnitude);
+      const magCls = m === "" ? "" : (m > 0 ? "up" : (m < 0 ? "down" : ""));
+      const magTxt = m === "" ? "—" : (m > 0 ? "+" : "") + m.toLocaleString(undefined,{maximumFractionDigits:2});
+      return [
+        dt(r.occurred_at),
+        `<span class="pill ${esc(r.intervention_type)}">${esc(r.intervention_type)}</span>`,
+        esc(r.entity_id),
+        `<code>${esc(ivVal(r.before_value))}</code> → <code>${esc(ivVal(r.after_value))}</code>`,
+        `<span class="mag ${magCls}">${magTxt}</span>`,
+        r.confidence == null ? "—" : Number(r.confidence).toFixed(2),
+      ];
+    }
+  ));
 
   put("ads", table(
     [{h:"date"},{h:"listing",r:1},{h:"clicks",r:1},{h:"impr.",r:1},{h:"spend",r:1},{h:"orders",r:1},{h:"revenue",r:1}],

@@ -183,6 +183,101 @@ CREATE TABLE IF NOT EXISTS messages (
   PRIMARY KEY (shop_id, thread_id, message_id)
 );
 
+-- ============================================================================
+-- ANALYSIS ENGINE (causal / effect analysis — product spec §6)
+--
+-- The collection layer above answers "what happened". These tables answer the
+-- real question: "I made intervention X → what was the effect Z, net of what
+-- would have happened anyway?" Never a bare "X caused Y": every effect carries
+-- a control-adjusted estimate, a confidence label, and explicit caveats.
+-- ============================================================================
+
+-- First-class "what I did" ledger. Snapshot-diff and interception both feed it;
+-- dedup_key collapses the same change seen from two sources. Distinct from the
+-- events log: an intervention is the analysis unit an experiment attaches to.
+CREATE TABLE IF NOT EXISTS interventions (
+  id                BIGSERIAL PRIMARY KEY,
+  shop_id           BIGINT NOT NULL REFERENCES shops(id),
+  intervention_type TEXT NOT NULL,   -- price_changed | listing_deactivated | photo_changed ...
+  entity_type       TEXT,            -- listing | ad | shop | conversation
+  entity_id         TEXT,
+  occurred_at       TIMESTAMPTZ NOT NULL,
+  before_value      JSONB,
+  after_value       JSONB,
+  magnitude         NUMERIC,         -- signed change size when numeric (e.g. price delta)
+  source            TEXT,            -- snapshot_diff | interception | dom_click
+  is_clean_window   BOOLEAN,         -- no overlapping intervention in the effect window
+  confidence        NUMERIC,         -- detector confidence the intervention really happened
+  dedup_key         TEXT UNIQUE,
+  created_at        TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_interventions_shop_time
+  ON interventions (shop_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_interventions_shop_type_time
+  ON interventions (shop_id, intervention_type, occurred_at);
+
+-- Long-format metric time series (analysis-ready). One row per
+-- (shop, scope, entity, metric, day). entity_id = '' for shop scope (a PK
+-- column cannot be NULL), else the listing_id as text.
+CREATE TABLE IF NOT EXISTS metric_timeseries (
+  shop_id     BIGINT NOT NULL REFERENCES shops(id),
+  scope       TEXT NOT NULL,              -- shop | listing
+  entity_id   TEXT NOT NULL DEFAULT '',
+  metric      TEXT NOT NULL,              -- views | visits | favorites | orders | revenue | conversion_rate
+  metric_date DATE NOT NULL,
+  value       NUMERIC,
+  PRIMARY KEY (shop_id, scope, entity_id, metric, metric_date)
+);
+CREATE INDEX IF NOT EXISTS idx_metric_ts_lookup
+  ON metric_timeseries (shop_id, scope, entity_id, metric, metric_date);
+
+-- One quasi-experiment per (intervention, metric, window). baseline_start/_end
+-- replace the spec's DATERANGE for portability (pg-mem has no range types).
+CREATE TABLE IF NOT EXISTS experiments (
+  id               BIGSERIAL PRIMARY KEY,
+  intervention_id  BIGINT REFERENCES interventions(id),
+  shop_id          BIGINT REFERENCES shops(id),
+  entity_id        TEXT,
+  metric           TEXT,
+  method           TEXT,            -- its | did | matched | synthetic | event_study
+  baseline_start   DATE,
+  baseline_end     DATE,
+  effect_window    TEXT,            -- t+1..t+3 | t+4..t+14 | t+15..t+30
+  control_group_id BIGINT,
+  created_at       TIMESTAMPTZ DEFAULT now()
+);
+
+-- Which control entities stand in for the counterfactual of a treated entity.
+CREATE TABLE IF NOT EXISTS control_assignments (
+  id             BIGSERIAL PRIMARY KEY,
+  treated_entity TEXT,
+  control_entity TEXT,
+  shop_id        BIGINT REFERENCES shops(id),
+  match_score    NUMERIC,
+  match_reason   JSONB,
+  created_at     TIMESTAMPTZ DEFAULT now()
+);
+
+-- The estimated effect: point estimate + CI, control-adjusted flag, a cautious
+-- confidence label, and caveats (freshness / seasonality / overlap).
+CREATE TABLE IF NOT EXISTS effects (
+  id                BIGSERIAL PRIMARY KEY,
+  experiment_id     BIGINT REFERENCES experiments(id),
+  shop_id           BIGINT REFERENCES shops(id),
+  intervention_type TEXT,
+  metric            TEXT,
+  effect_window     TEXT,
+  point_estimate    NUMERIC,
+  ci_low            NUMERIC,
+  ci_high           NUMERIC,
+  control_adjusted  BOOLEAN,
+  confidence_label  TEXT,            -- low | medium | high
+  caveats           JSONB,
+  computed_at       TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_effects_shop_type
+  ON effects (shop_id, intervention_type, metric);
+
 -- ── Derived: first-response time per thread (spec §5.1) ─────────────────────
 CREATE OR REPLACE VIEW response_metrics AS
 WITH firsts AS (

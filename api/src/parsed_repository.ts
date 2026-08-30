@@ -103,7 +103,7 @@ export async function getLatestSnapshotBefore(
   capturedAt: string
 ): Promise<PriorSnapshot | null> {
   const res = await q.query(
-    `SELECT state, price, title, tags, num_images, image_hashes
+    `SELECT state, price, title, tags, num_images, image_hashes, quantity
        FROM listing_snapshots
       WHERE shop_id=$1 AND listing_id=$2 AND captured_at < $3
       ORDER BY captured_at DESC
@@ -119,6 +119,7 @@ export async function getLatestSnapshotBefore(
     tags: (r.tags as string[] | null) ?? null,
     numImages: r.num_images === null || r.num_images === undefined ? null : Number(r.num_images),
     imageHashes: (r.image_hashes as string[] | null) ?? null,
+    quantity: r.quantity === null || r.quantity === undefined ? null : Number(r.quantity),
   };
 }
 

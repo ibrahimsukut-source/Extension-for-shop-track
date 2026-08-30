@@ -87,4 +87,74 @@ CREATE TABLE messages (
   sent_at TIMESTAMPTZ, has_text BOOLEAN,
   PRIMARY KEY (shop_id, thread_id, message_id)
 );
+
+-- ── ANALYSIS ENGINE (causal / effect analysis, product spec §6) ────────────
+-- First-class "what I did" ledger. Snapshot-diff and interception both feed it;
+-- dedup_key collapses the same change seen from two sources.
+CREATE TABLE interventions (
+  id SERIAL PRIMARY KEY,
+  shop_id BIGINT NOT NULL,
+  intervention_type TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id TEXT,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  before_value JSONB,
+  after_value JSONB,
+  magnitude NUMERIC,
+  source TEXT,
+  is_clean_window BOOLEAN,
+  confidence NUMERIC,
+  dedup_key TEXT UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+-- Long-format metric time series (analysis-ready). entity_id = '' for shop scope
+-- (a PK column cannot be NULL), else the listing_id as text.
+CREATE TABLE metric_timeseries (
+  shop_id BIGINT NOT NULL,
+  scope TEXT NOT NULL,
+  entity_id TEXT NOT NULL DEFAULT '',
+  metric TEXT NOT NULL,
+  metric_date DATE NOT NULL,
+  value NUMERIC,
+  PRIMARY KEY (shop_id, scope, entity_id, metric, metric_date)
+);
+-- One quasi-experiment per (intervention, metric, window). baseline_start/_end
+-- replace the spec's DATERANGE for portability (pg-mem has no range types).
+CREATE TABLE experiments (
+  id SERIAL PRIMARY KEY,
+  intervention_id BIGINT,
+  shop_id BIGINT,
+  entity_id TEXT,
+  metric TEXT,
+  method TEXT,
+  baseline_start DATE,
+  baseline_end DATE,
+  effect_window TEXT,
+  control_group_id BIGINT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE control_assignments (
+  id SERIAL PRIMARY KEY,
+  treated_entity TEXT,
+  control_entity TEXT,
+  shop_id BIGINT,
+  match_score NUMERIC,
+  match_reason JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE effects (
+  id SERIAL PRIMARY KEY,
+  experiment_id BIGINT,
+  shop_id BIGINT,
+  intervention_type TEXT,
+  metric TEXT,
+  effect_window TEXT,
+  point_estimate NUMERIC,
+  ci_low NUMERIC,
+  ci_high NUMERIC,
+  control_adjusted BOOLEAN,
+  confidence_label TEXT,
+  caveats JSONB,
+  computed_at TIMESTAMPTZ DEFAULT now()
+);
 `;
