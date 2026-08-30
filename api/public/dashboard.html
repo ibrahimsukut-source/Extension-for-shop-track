@@ -63,6 +63,9 @@
   <span class="dot" id="dot"></span>
   <h1>Etsy Shop Tracker</h1>
   <span class="muted" id="status">connecting…</span>
+  <span style="margin-left:auto"></span>
+  <a id="exportMd" href="#" target="_blank" class="muted" style="text-decoration:none;border:1px solid var(--line);padding:3px 9px;border-radius:6px;font-size:12px;">AI Özeti (Markdown)</a>
+  <a id="exportJson" href="#" target="_blank" class="muted" style="text-decoration:none;border:1px solid var(--line);padding:3px 9px;border-radius:6px;font-size:12px;">JSON</a>
 </header>
 <main>
   <div class="tiles" id="tiles"></div>
@@ -122,6 +125,14 @@
 
 <script>
 const KEY = new URLSearchParams(location.search).get("key");
+function summaryUrl(format) {
+  const params = new URLSearchParams();
+  if (KEY) params.set("key", KEY);
+  params.set("format", format);
+  return "/analysis/summary?" + params.toString();
+}
+document.getElementById("exportMd").href = summaryUrl("md");
+document.getElementById("exportJson").href = summaryUrl("json");
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
 const num = (n) => n == null ? "—" : Number(n).toLocaleString();

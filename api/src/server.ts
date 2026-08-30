@@ -9,6 +9,7 @@ import type { Pool } from "./repository.js";
 import { ingestApi, ingestEvents, ingestHttp } from "./service.js";
 import { ingestApiBody, ingestEventBody, ingestHttpBody } from "./schemas.js";
 import { getDashboardData } from "./dashboard_repo.js";
+import { buildAnalysisSummary, toMarkdown } from "./analysis/summary.js";
 import { scheduleParse } from "./parse/scheduler.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -62,6 +63,21 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
       if (key !== config.dashboardKey) return reply.code(401).send({ error: "unauthorized" });
     }
     return reply.send(await getDashboardData(pool));
+  });
+
+  // AI structured summary export (spec §9) — everything the causal engine has
+  // computed, as JSON (default) or Markdown (?format=md) ready to paste into
+  // an LLM conversation. Same gate as the dashboard.
+  app.get("/analysis/summary", async (request, reply) => {
+    const query = request.query as { key?: string; format?: string } | undefined;
+    if (config.dashboardKey && query?.key !== config.dashboardKey) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    const summary = await buildAnalysisSummary(pool);
+    if (query?.format === "md" || query?.format === "markdown") {
+      return reply.type("text/markdown; charset=utf-8").send(toMarkdown(summary));
+    }
+    return reply.send(summary);
   });
 
   // Auth for every /ingest/* route: resolve token -> shop_tag (spec §9).
