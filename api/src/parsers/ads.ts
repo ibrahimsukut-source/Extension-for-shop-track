@@ -21,8 +21,19 @@
 // real POST /prolist/listings toggle response { listings: {"<listingId>":
 // boolean}, countOfAdvertisedListings }, which carries no daily metric but is
 // itself an intervention (spec §4 ad-level: etsy_ads_on / etsy_ads_off) —
-// promoted via adToggles instead of adsDaily.
-import type { AdsDailyRow, AdToggleRow, Parser } from "./types.js";
+// promoted via adToggles instead of adsDaily. And the real PUT
+// /prolist/campaign-budget response { totalDailyBudget, isActive, ... } —
+// also an intervention (spec §4: ad_budget_changed) — promoted via
+// adBudgetChanges.
+//
+// IMPORTANT: /prolist/stats auto-adjusts `granularity` to the requested date
+// range ('day' for short ranges, 'month' for e.g. "this year" — a real
+// capture confirmed this: a Jan-Aug range came back with 9 MONTHLY buckets,
+// not daily ones). ads_daily is a strictly daily table, so a month's totals
+// written into one day's row would silently masquerade as a huge single-day
+// spike (and could clobber a real day's onsite row via the same PK). Only
+// granularity:'day' is parsed into adsDaily; anything else is skipped.
+import type { AdBudgetChangeRow, AdsDailyRow, AdToggleRow, Parser } from "./types.js";
 import { getArray, isObject, pick, toDateOnly, toInt, toMoney, toStr } from "./util.js";
 
 export const SHOP_TOTAL_LISTING = 0;
@@ -32,6 +43,11 @@ function isToggleShape(body: unknown): body is { listings: Record<string, unknow
   if (!isObject(body) || !isObject(body.listings)) return false;
   const vals = Object.values(body.listings);
   return vals.length > 0 && vals.every((v) => typeof v === "boolean");
+}
+
+/** True for the campaign-budget response shape: has a numeric totalDailyBudget. */
+function isBudgetShape(body: unknown): body is { totalDailyBudget: number; isActive?: unknown } {
+  return isObject(body) && typeof body.totalDailyBudget === "number";
 }
 
 /** Sum an array of {clickCount, timestamp} into clicks-per-day. */
@@ -69,6 +85,16 @@ export const parseAds: Parser = (body) => {
     return { adToggles };
   }
 
+  // Shape 0b: campaign budget change response.
+  if (isBudgetShape(body)) {
+    const dailyBudget = minorToMajor(body.totalDailyBudget);
+    if (dailyBudget === null) return {};
+    const adBudgetChanges: AdBudgetChangeRow[] = [
+      { dailyBudget, isActive: typeof body.isActive === "boolean" ? body.isActive : null },
+    ];
+    return { adBudgetChanges };
+  }
+
   // Shape 1: offsite ad-traffic click stats. Only `stats` is the current
   // period; `comparisonStats` is the previous period, ignored.
   if (isObject(body) && (Array.isArray(body.stats) || Array.isArray(body.comparisonStats))) {
@@ -90,8 +116,11 @@ export const parseAds: Parser = (body) => {
 
   // Shape 1b: on-site Etsy Ads daily stats (real GET /prolist/stats shape).
   // Only `graphStats` is the current period; `comparisonGraphStats` is the
-  // previous period, ignored.
+  // previous period, ignored. Only granularity:'day' is daily — see the
+  // module doc comment on why 'month'/'week' buckets must not be ingested
+  // here (they'd masquerade as single-day spikes in a daily table).
   if (isObject(body) && Array.isArray(body.graphStats)) {
+    if (body.granularity !== "day") return {};
     for (const e of body.graphStats) {
       if (!isObject(e)) continue;
       const statDate = toDateOnly(e.timestamp);

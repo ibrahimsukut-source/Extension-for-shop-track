@@ -105,6 +105,7 @@ test("ads parser: real prolist/stats (on-site Etsy Ads) graphStats -> ads_daily 
   // Real OrnamentsPoint capture: GET /prolist/stats response (trimmed to 2 days).
   const out = parseAds(
     {
+      granularity: "day",
       graphStats: [
         { impressionCount: 990, clickCount: 7, spentTotal: 1112, conversions: 2, revenue: 2727, clickRate: 0.7, roas: 2.45, timestamp: 1787976000 },
         { impressionCount: 0, clickCount: 0, spentTotal: 0, conversions: 0, revenue: 0, clickRate: 0, roas: 0, timestamp: 1785556800 },
@@ -135,7 +136,7 @@ test("runner: on-site Etsy Ads and offsite Ads write separate rows for the same 
   });
   await seedCapture(pool, {
     shopId: SHOP, captureType: "ads",
-    body: { graphStats: [{ impressionCount: 990, clickCount: 7, spentTotal: 1112, conversions: 2, revenue: 2727, timestamp: 1787976000 /* 2026-08-29 */ }] }, // onsite: spend/ROAS
+    body: { granularity: "day", graphStats: [{ impressionCount: 990, clickCount: 7, spentTotal: 1112, conversions: 2, revenue: 2727, timestamp: 1787976000 /* 2026-08-29 */ }] }, // onsite: spend/ROAS
     capturedAt: "2026-08-29T23:05:00.000Z",
   });
   await parseAll(pool);
@@ -147,6 +148,49 @@ test("runner: on-site Etsy Ads and offsite Ads write separate rows for the same 
   assert.equal(offsite.spend, null);
   assert.equal(onsite.clicks, 7);
   assert.equal(Number(onsite.spend), 11.12);
+});
+
+test("ads parser: non-daily granularity is NOT ingested into ads_daily (would masquerade as a single-day spike)", () => {
+  // Real OrnamentsPoint capture: "this year" range -> Etsy auto-aggregates to
+  // monthly buckets. Trimmed to 2 of the 9 real monthly entries.
+  const out = parseAds(
+    {
+      granularity: "month",
+      graphStats: [
+        { impressionCount: 29099, clickCount: 384, spentTotal: 53180, conversions: 30, revenue: 112393, roas: 2.11, timestamp: 1777608000 },
+        { impressionCount: 1806, clickCount: 19, spentTotal: 2664, conversions: 2, revenue: 2727, roas: 1.02, timestamp: 1785556800 },
+      ],
+    },
+    { shopId: 1, capturedAt: "t" }
+  );
+  assert.deepEqual(out, {});
+});
+
+test("ads parser: real PUT /prolist/campaign-budget response -> adBudgetChanges", () => {
+  const out = parseAds(
+    { totalDailyBudget: 7500, totalDailyBudgetFormatted: "$75.00", isActive: true, status: 1, createDate: 1634818495, updateDate: 1788126469 },
+    { shopId: 1, capturedAt: "t" }
+  );
+  assert.deepEqual(out.adBudgetChanges, [{ dailyBudget: 75, isActive: true }]);
+});
+
+test("runner: budget change promotes an ad_budget_changed intervention (shop-wide, no entity_id)", async () => {
+  const pool = makeTestPool();
+  await seedCapture(pool, {
+    shopId: SHOP, captureType: "ads",
+    body: { totalDailyBudget: 7500, isActive: true },
+    capturedAt: "2026-08-30T21:47:49.000Z",
+  });
+  const summary = await parseAll(pool);
+  assert.equal(summary.interventions, 1);
+
+  const iv = await pool.query("SELECT intervention_type, entity_type, entity_id, after_value, source FROM interventions");
+  assert.equal(iv.rows.length, 1);
+  assert.equal(iv.rows[0].intervention_type, "ad_budget_changed");
+  assert.equal(iv.rows[0].entity_type, "shop");
+  assert.equal(iv.rows[0].entity_id, null);
+  assert.equal(Number(iv.rows[0].after_value), 75);
+  assert.equal(iv.rows[0].source, "interception");
 });
 
 test("ads parser: real prolist/listings toggle response -> adToggles", () => {

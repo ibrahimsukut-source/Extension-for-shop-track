@@ -62,6 +62,15 @@ export interface AdToggleRow {
   isAdvertised: boolean;
 }
 
+// Etsy Ads daily budget change: PUT /prolist/campaign-budget response (real
+// shape confirmed on OrnamentsPoint: $50 -> $75/day). Shop-wide (the whole
+// Etsy Ads "campaign"), not per-listing — spec §4 ad-level intervention
+// ad_budget_changed. dailyBudget is already converted to major currency units.
+export interface AdBudgetChangeRow {
+  dailyBudget: number;
+  isActive: boolean | null;
+}
+
 export interface OrderRow {
   receiptId: number;
   orderedAt: string | null;
@@ -113,6 +122,7 @@ export interface ParseOutput {
   listingSnapshots?: ListingSnapshotRow[];
   adsDaily?: AdsDailyRow[];
   adToggles?: AdToggleRow[];
+  adBudgetChanges?: AdBudgetChangeRow[];
   orders?: OrderRow[];
   reviews?: ReviewRow[];
   messageThreads?: MessageThreadRow[];

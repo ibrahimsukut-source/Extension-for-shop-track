@@ -79,6 +79,22 @@ async function applyOutput(
     };
     if (await upsertIntervention(q, shopId, iv)) summary.interventions++;
   }
+  // Ad budget change -> intervention directly, same reasoning as toggles.
+  // Shop-wide (no entity_id): the whole Etsy Ads campaign budget.
+  for (const r of out.adBudgetChanges ?? []) {
+    const iv: Intervention = {
+      interventionType: "ad_budget_changed",
+      entityType: "shop",
+      entityId: null,
+      occurredAt: capturedAt,
+      beforeValue: null,
+      afterValue: r.dailyBudget,
+      magnitude: null,
+      source: "interception",
+      confidence: 0.95,
+    };
+    if (await upsertIntervention(q, shopId, iv)) summary.interventions++;
+  }
   for (const r of out.orders ?? []) {
     await upsertOrder(q, shopId, r);
     summary.orders++;
