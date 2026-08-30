@@ -4,9 +4,12 @@
 // live seller panel): { metrics_summary:{visits,orders,revenue,conversion_rate},
 // traffic_breakdown:{etsy_traffic,user_traffic}, start_date "MM/DD/YYYY",
 // listings:{listings:[{id,visits,orders,revenue,favorites,badge_text}]} }.
-// A generic array-based fallback remains for other/older stats payloads.
+// Also handles the real GET /stats/slim-stats?date_range=... shop-summary-card
+// shape: { metrics:[{key,formattedValue}], requestMetadata:{dateRange,channel} }
+// — real capture from OrnamentsPoint (shop 32467610). A generic array-based
+// fallback remains for other/older stats payloads.
 import type { JsonObject } from "./util.js";
-import type { ListingStatsDailyRow, ParseOutput, Parser, StatsDailyRow } from "./types.js";
+import type { ListingStatsDailyRow, ParseContext, ParseOutput, Parser, StatsDailyRow } from "./types.js";
 import { getArray, isObject, pick, toDateOnly, toInt, toMoney, toStr } from "./util.js";
 
 /** Etsy stats dates are US format "MM/DD/YYYY"; normalize to YYYY-MM-DD (no TZ shift). */
@@ -100,6 +103,65 @@ function parseAnalyticsStats(body: JsonObject): ParseOutput | null {
   return { statsDaily, listingStatsDaily };
 }
 
+/** Strip a formatted display value ("1,258 TL", "37") down to a plain number. */
+function parseFormattedNumber(v: unknown): number | null {
+  const s = toStr(v);
+  if (s === null) return null;
+  const n = Number(s.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** yyyy-mm-dd for `offsetDays` days before/after the UTC date of `capturedAt`. */
+function shiftDate(capturedAt: string, offsetDays: number): string | null {
+  const d = new Date(capturedAt);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Shape: GET /stats/slim-stats — a shop-wide summary CARD, not a per-day
+ * series: one number per metric for the whole requested range, with no date
+ * field of its own (only a relative label like "today"/"last_7" in
+ * requestMetadata.dateRange). Only 'today' and 'yesterday' map to one
+ * specific calendar day; any other range (last_7, last_30, custom, ...) is an
+ * aggregate over many days and is intentionally skipped here — writing it as
+ * if it were a single day would silently corrupt stats_daily the same way an
+ * unguarded ads granularity mismatch would (see the comments in parsers/ads.ts
+ * — same class of bug, same fix: refuse to map an aggregate onto one day).
+ * Also skipped when a specific sales channel is selected (channel !== null):
+ * that's a subset of the shop, not the shop-wide total this table represents.
+ */
+function parseSlimStats(body: JsonObject, capturedAt: string): ParseOutput | null {
+  if (!Array.isArray(body.metrics)) return null;
+  const meta = isObject(body.requestMetadata) ? body.requestMetadata : {};
+  if (meta.channel != null) return null;
+  const dateRange = toStr(meta.dateRange);
+  const statDate = dateRange === "today" ? shiftDate(capturedAt, 0) : dateRange === "yesterday" ? shiftDate(capturedAt, -1) : null;
+  if (!statDate) return null;
+
+  const byKey = new Map<string, unknown>();
+  for (const m of body.metrics) {
+    if (isObject(m) && typeof m.key === "string") byKey.set(m.key, m.formattedValue);
+  }
+
+  return {
+    statsDaily: [
+      {
+        statDate,
+        visits: toInt(parseFormattedNumber(byKey.get("visits"))),
+        views: toInt(parseFormattedNumber(byKey.get("views"))),
+        orders: toInt(parseFormattedNumber(byKey.get("orders"))),
+        revenue: parseFormattedNumber(byKey.get("revenue")),
+        currency: null, // the formatted string carries a symbol/code, not parsed out here
+        conversionRate: null,
+        trafficSources: null,
+        topSearchTerms: null,
+      },
+    ],
+  };
+}
+
 /** Generic fallback: an array of per-day entries each carrying a date field. */
 function parseGenericStats(body: unknown): ParseOutput {
   const entries = getArray(body, ["stats", "daily", "days", "series", "results"]);
@@ -147,8 +209,10 @@ function parseGenericStats(body: unknown): ParseOutput {
   return { statsDaily, listingStatsDaily };
 }
 
-export const parseStats: Parser = (body) => {
+export const parseStats: Parser = (body, ctx: ParseContext) => {
   if (isObject(body)) {
+    const slim = parseSlimStats(body, ctx.capturedAt);
+    if (slim) return slim;
     const analytics = parseAnalyticsStats(body);
     if (analytics) return analytics;
   }

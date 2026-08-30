@@ -5,6 +5,7 @@ import { parseAll } from "../src/parse/runner.js";
 import { detectListingInterventions } from "../src/analysis/interventions.js";
 import { buildMetricTimeseries } from "../src/analysis/repository.js";
 import { parseAds } from "../src/parsers/ads.js";
+import { parseStats } from "../src/parsers/stats.js";
 import type { ListingSnapshotRow } from "../src/parsers/types.js";
 import type { PriorSnapshot } from "../src/parse/diff.js";
 
@@ -230,4 +231,66 @@ test("metric_builder: idempotent refresh (rebuild overwrites, no duplicate rows)
   await buildMetricTimeseries(pool);
   const after = await pool.query("SELECT count(*)::int AS n FROM metric_timeseries");
   assert.equal(before.rows[0].n, after.rows[0].n);
+});
+
+test("stats parser: real GET /stats/slim-stats (dateRange=yesterday) -> one stats_daily row", () => {
+  // Real OrnamentsPoint capture.
+  const out = parseStats(
+    {
+      metrics: [
+        { key: "views", label: "Total Views", formattedValue: "37" },
+        { key: "visits", label: "Visits", formattedValue: "16" },
+        { key: "orders", label: "Orders", formattedValue: "2" },
+        { key: "revenue", label: "Revenue", formattedValue: "1,258 TL" },
+      ],
+      requestMetadata: { dateRange: "yesterday", channel: null },
+    },
+    { shopId: 1, capturedAt: "2026-08-31T10:00:00.000Z" }
+  );
+  assert.equal(out.statsDaily?.length, 1);
+  const row = out.statsDaily![0];
+  assert.equal(row.statDate, "2026-08-30"); // yesterday relative to capturedAt
+  assert.equal(row.views, 37);
+  assert.equal(row.visits, 16);
+  assert.equal(row.orders, 2);
+  assert.equal(row.revenue, 1258);
+});
+
+test("stats parser: slim-stats aggregate ranges (last_7 etc.) are NOT mapped to a single day", () => {
+  // Real OrnamentsPoint capture: dateRange=last_7 is a 7-day sum, not one day.
+  const out = parseStats(
+    {
+      metrics: [
+        { key: "views", label: "Total Views", formattedValue: "129" },
+        { key: "visits", label: "Visits", formattedValue: "87" },
+        { key: "orders", label: "Orders", formattedValue: "2" },
+        { key: "revenue", label: "Revenue", formattedValue: "1,258 TL" },
+      ],
+      requestMetadata: { dateRange: "last_7", channel: null },
+    },
+    { shopId: 1, capturedAt: "2026-08-31T10:00:00.000Z" }
+  );
+  assert.equal(out.statsDaily?.length ?? 0, 0);
+});
+
+test("runner: slim-stats 'today' capture writes stats_daily for the capture's own day", async () => {
+  const pool = makeTestPool();
+  await seedCapture(pool, {
+    shopId: SHOP, captureType: "stats",
+    body: {
+      metrics: [
+        { key: "views", label: "Total Views", formattedValue: "37" },
+        { key: "visits", label: "Visits", formattedValue: "16" },
+        { key: "orders", label: "Orders", formattedValue: "2" },
+        { key: "revenue", label: "Revenue", formattedValue: "1,258 TL" },
+      ],
+      requestMetadata: { dateRange: "today", channel: null },
+    },
+    capturedAt: "2026-08-30T09:00:00.000Z",
+  });
+  await parseAll(pool);
+  const row = await pool.query("SELECT visits, views, orders, revenue FROM stats_daily WHERE stat_date='2026-08-30'");
+  assert.equal(row.rows.length, 1);
+  assert.equal(row.rows[0].views, 37);
+  assert.equal(Number(row.rows[0].revenue), 1258);
 });

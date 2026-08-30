@@ -16,6 +16,7 @@
     { "match": "*/reviews*", "type": "review" },
 
     { "match": "*/shop-analytics-stats*", "type": "stats" },
+    { "match": "*/stats/slim-stats*", "type": "stats" },
     { "match": "*/stats/dashboard-listing*", "type": "stats" },
     { "match": "*/stats/traffic-detail*", "type": "stats" },
     { "match": "/api/v3/ajax/bespoke/member/shops/*/stats*", "type": "stats" },
