@@ -126,13 +126,13 @@ export async function getLatestSnapshotBefore(
 export async function upsertAdsDaily(q: Queryable, shopId: number, r: AdsDailyRow): Promise<void> {
   await q.query(
     `INSERT INTO ads_daily
-       (shop_id, stat_date, listing_id, state, spend, impressions, clicks, orders_from_ads, revenue_from_ads)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-     ON CONFLICT (shop_id, stat_date, listing_id) DO UPDATE SET
+       (shop_id, stat_date, listing_id, channel, state, spend, impressions, clicks, orders_from_ads, revenue_from_ads)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ON CONFLICT (shop_id, stat_date, listing_id, channel) DO UPDATE SET
        state=EXCLUDED.state, spend=EXCLUDED.spend, impressions=EXCLUDED.impressions,
        clicks=EXCLUDED.clicks, orders_from_ads=EXCLUDED.orders_from_ads,
        revenue_from_ads=EXCLUDED.revenue_from_ads`,
-    [shopId, r.statDate, r.listingId, r.state, r.spend, r.impressions, r.clicks, r.ordersFromAds, r.revenueFromAds]
+    [shopId, r.statDate, r.listingId, r.channel, r.state, r.spend, r.impressions, r.clicks, r.ordersFromAds, r.revenueFromAds]
   );
 }
 

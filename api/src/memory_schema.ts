@@ -58,10 +58,11 @@ CREATE TABLE listing_snapshots (
   UNIQUE (shop_id, listing_id, captured_at)
 );
 CREATE TABLE ads_daily (
-  shop_id BIGINT, stat_date DATE, listing_id BIGINT, state TEXT,
+  shop_id BIGINT, stat_date DATE, listing_id BIGINT,
+  channel TEXT NOT NULL DEFAULT 'unknown', state TEXT,
   spend NUMERIC(12,2), impressions INT, clicks INT, orders_from_ads INT,
   revenue_from_ads NUMERIC(12,2),
-  PRIMARY KEY (shop_id, stat_date, listing_id)
+  PRIMARY KEY (shop_id, stat_date, listing_id, channel)
 );
 CREATE TABLE orders (
   shop_id BIGINT, receipt_id BIGINT, ordered_at TIMESTAMPTZ, buyer_hash TEXT,

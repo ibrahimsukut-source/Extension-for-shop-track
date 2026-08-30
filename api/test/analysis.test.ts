@@ -101,6 +101,54 @@ test("metric_builder: shop stats flow into long-format metric_timeseries", async
   assert.equal(Number(views.rows[0].value), 200);
 });
 
+test("ads parser: real prolist/stats (on-site Etsy Ads) graphStats -> ads_daily rows", () => {
+  // Real OrnamentsPoint capture: GET /prolist/stats response (trimmed to 2 days).
+  const out = parseAds(
+    {
+      graphStats: [
+        { impressionCount: 990, clickCount: 7, spentTotal: 1112, conversions: 2, revenue: 2727, clickRate: 0.7, roas: 2.45, timestamp: 1787976000 },
+        { impressionCount: 0, clickCount: 0, spentTotal: 0, conversions: 0, revenue: 0, clickRate: 0, roas: 0, timestamp: 1785556800 },
+      ],
+      comparisonGraphStats: [{ impressionCount: 999, clickCount: 99, spentTotal: 999, conversions: 9, revenue: 999, timestamp: 1782878400 }],
+    },
+    { shopId: 1, capturedAt: "t" }
+  );
+  assert.equal(out.adsDaily?.length, 2);
+  const day = out.adsDaily!.find((r) => r.spend! > 0)!;
+  assert.equal(day.channel, "onsite");
+  assert.equal(day.listingId, 0);
+  assert.equal(day.spend, 11.12); // 1112 minor units -> 11.12
+  assert.equal(day.revenueFromAds, 27.27);
+  assert.equal(day.impressions, 990);
+  assert.equal(day.clicks, 7);
+  assert.equal(day.ordersFromAds, 2);
+});
+
+test("runner: on-site Etsy Ads and offsite Ads write separate rows for the same day (no clobber)", async () => {
+  const pool = makeTestPool();
+  // Same calendar day (2026-08-29), two different ad programs -> must land as
+  // two distinct rows, not one overwriting the other.
+  await seedCapture(pool, {
+    shopId: SHOP, captureType: "ads",
+    body: { stats: [{ timestamp: "2026-08-29T10:00:00Z", clickCount: 20 }] }, // offsite: clicks only
+    capturedAt: "2026-08-29T23:00:00.000Z",
+  });
+  await seedCapture(pool, {
+    shopId: SHOP, captureType: "ads",
+    body: { graphStats: [{ impressionCount: 990, clickCount: 7, spentTotal: 1112, conversions: 2, revenue: 2727, timestamp: 1787976000 /* 2026-08-29 */ }] }, // onsite: spend/ROAS
+    capturedAt: "2026-08-29T23:05:00.000Z",
+  });
+  await parseAll(pool);
+  const rows = await pool.query("SELECT channel, clicks, spend FROM ads_daily WHERE stat_date='2026-08-29' ORDER BY channel");
+  assert.equal(rows.rows.length, 2);
+  const offsite = rows.rows.find((r: any) => r.channel === "offsite");
+  const onsite = rows.rows.find((r: any) => r.channel === "onsite");
+  assert.equal(offsite.clicks, 20);
+  assert.equal(offsite.spend, null);
+  assert.equal(onsite.clicks, 7);
+  assert.equal(Number(onsite.spend), 11.12);
+});
+
 test("ads parser: real prolist/listings toggle response -> adToggles", () => {
   // Real OrnamentsPoint capture: POST /prolist/listings response.
   const out = parseAds({ listings: { "4438707768": false }, countOfAdvertisedListings: 91 }, { shopId: 1, capturedAt: "t" });

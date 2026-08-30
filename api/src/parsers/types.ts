@@ -43,6 +43,9 @@ export interface ListingSnapshotRow {
 export interface AdsDailyRow {
   statDate: string;
   listingId: number; // 0 = shop total
+  channel: "onsite" | "offsite" | "unknown"; // Etsy Ads vs Offsite Ads — distinct
+  // programs Etsy reports separately; must not overwrite each other on the
+  // same (shop, date, listing).
   state: string | null;
   spend: number | null;
   impressions: number | null;

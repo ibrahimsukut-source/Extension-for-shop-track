@@ -114,17 +114,23 @@ CREATE TABLE IF NOT EXISTS listing_stats_daily (
 );
 
 -- ── ETSY ADS (daily) ────────────────────────────────────────────────────────
+-- Etsy runs two separate ad programs that both report at shop-wide (listing_id
+-- = 0) granularity: on-site Etsy Ads (spend/impressions/ROAS,
+-- GET /prolist/stats) and Offsite Ads (clicks only, ad-traffic). `channel` is
+-- part of the key so parsing one program never overwrites the other's row
+-- for the same (shop, date, listing).
 CREATE TABLE IF NOT EXISTS ads_daily (
   shop_id           BIGINT REFERENCES shops(id),
   stat_date         DATE,
   listing_id        BIGINT,       -- 0 = shop total (PK columns cannot be NULL)
+  channel           TEXT NOT NULL DEFAULT 'unknown', -- onsite | offsite | unknown
   state             TEXT,         -- on | off
   spend             NUMERIC(12,2),
   impressions       INT,
   clicks            INT,
   orders_from_ads   INT,
   revenue_from_ads  NUMERIC(12,2),
-  PRIMARY KEY (shop_id, stat_date, listing_id)
+  PRIMARY KEY (shop_id, stat_date, listing_id, channel)
 );
 
 -- ── ORDERS ──────────────────────────────────────────────────────────────────

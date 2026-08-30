@@ -1,14 +1,27 @@
 // Ads parser -> ads_daily (+ ad on/off toggles). listing_id = 0 denotes the
-// shop-wide total.
+// shop-wide total. Etsy has TWO separate ad programs that both report at
+// shop-wide granularity — Offsite Ads (clicks only, via ad-traffic) and
+// on-site Etsy Ads (spend/impressions/ROAS, via prolist/stats). ads_daily's
+// key includes `channel` so parsing one never clobbers the other's row for
+// the same (shop, date, listing=0).
 //
-// Handles Etsy's real ad-traffic shape { stats: [{clickCount, timestamp}],
-// comparisonStats: [...] } by summing hourly clicks into daily rows (this
-// endpoint gives clicks only; spend/impressions stay null). Also handles a
-// richer per-day entry shape { date, spend, impressions, clicks, ... }, and
-// the real POST /prolist/listings toggle response
-// { listings: {"<listingId>": boolean}, countOfAdvertisedListings }, which
-// carries no daily metric but is itself an intervention (spec §4 ad-level:
-// etsy_ads_on / etsy_ads_off) — promoted via adToggles.
+// Handles Etsy's real offsite ad-traffic shape { stats: [{clickCount,
+// timestamp}], comparisonStats: [...] } by summing hourly clicks into daily
+// rows (channel='offsite'; this endpoint gives clicks only, spend/impressions
+// stay null). Handles the real on-site GET /prolist/stats shape
+// { graphStats: [{impressionCount, clickCount, spentTotal, conversions,
+// revenue, roas, timestamp}], comparisonGraphStats: [...] } — real capture
+// from OrnamentsPoint (shop 32467610) — as channel='onsite' daily rows;
+// spentTotal/revenue are minor-unit integers (matches Etsy's amount/divisor=
+// 100 money convention elsewhere: e.g. revenue 2727 / spentTotal 1112 = 2.45,
+// exactly the reported roas). comparisonGraphStats is the previous period and
+// is intentionally ignored, same as offsite's comparisonStats. Also handles a
+// richer generic per-day entry shape { date, spend, impressions, clicks, ...
+// } (channel='unknown' — origin not identifiable from shape alone), and the
+// real POST /prolist/listings toggle response { listings: {"<listingId>":
+// boolean}, countOfAdvertisedListings }, which carries no daily metric but is
+// itself an intervention (spec §4 ad-level: etsy_ads_on / etsy_ads_off) —
+// promoted via adToggles instead of adsDaily.
 import type { AdsDailyRow, AdToggleRow, Parser } from "./types.js";
 import { getArray, isObject, pick, toDateOnly, toInt, toMoney, toStr } from "./util.js";
 
@@ -35,6 +48,12 @@ function clicksByDay(arr: unknown): Map<string, number> {
   return byDay;
 }
 
+/** Minor-unit integer (Etsy money convention, divisor=100) -> major-unit number. */
+function minorToMajor(v: unknown): number | null {
+  const n = toInt(v);
+  return n === null ? null : n / 100;
+}
+
 export const parseAds: Parser = (body) => {
   const adsDaily: AdsDailyRow[] = [];
 
@@ -50,13 +69,14 @@ export const parseAds: Parser = (body) => {
     return { adToggles };
   }
 
-  // Shape 1: ad-traffic click stats. Only `stats` is the current period;
-  // `comparisonStats` is the previous period and is intentionally ignored here.
+  // Shape 1: offsite ad-traffic click stats. Only `stats` is the current
+  // period; `comparisonStats` is the previous period, ignored.
   if (isObject(body) && (Array.isArray(body.stats) || Array.isArray(body.comparisonStats))) {
     for (const [statDate, clicks] of clicksByDay(body.stats)) {
       adsDaily.push({
         statDate,
         listingId: SHOP_TOTAL_LISTING,
+        channel: "offsite",
         state: null,
         spend: null,
         impressions: null,
@@ -68,7 +88,30 @@ export const parseAds: Parser = (body) => {
     return { adsDaily };
   }
 
-  // Shape 2: richer per-day entries.
+  // Shape 1b: on-site Etsy Ads daily stats (real GET /prolist/stats shape).
+  // Only `graphStats` is the current period; `comparisonGraphStats` is the
+  // previous period, ignored.
+  if (isObject(body) && Array.isArray(body.graphStats)) {
+    for (const e of body.graphStats) {
+      if (!isObject(e)) continue;
+      const statDate = toDateOnly(e.timestamp);
+      if (!statDate) continue;
+      adsDaily.push({
+        statDate,
+        listingId: SHOP_TOTAL_LISTING,
+        channel: "onsite",
+        state: null,
+        spend: minorToMajor(e.spentTotal),
+        impressions: toInt(e.impressionCount),
+        clicks: toInt(e.clickCount),
+        ordersFromAds: toInt(e.conversions),
+        revenueFromAds: minorToMajor(e.revenue),
+      });
+    }
+    return { adsDaily };
+  }
+
+  // Shape 2: richer per-day entries (origin not identifiable from shape alone).
   const entries = getArray(body, ["ads", "advertising", "campaigns", "daily", "results"]);
   for (const e of entries) {
     const statDate = toDateOnly(pick(e, ["date", "day", "stat_date"]));
@@ -78,6 +121,7 @@ export const parseAds: Parser = (body) => {
     adsDaily.push({
       statDate,
       listingId: toInt(pick(e, ["listing_id", "listingId"])) ?? SHOP_TOTAL_LISTING,
+      channel: "unknown",
       state: toStr(pick(e, ["state", "status"])),
       spend: spend.value,
       impressions: toInt(pick(e, ["impressions", "views"])),

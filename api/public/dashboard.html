@@ -143,9 +143,12 @@ function render(d) {
   ));
 
   put("ads", table(
-    [{h:"date"},{h:"listing",r:1},{h:"clicks",r:1},{h:"impr.",r:1},{h:"spend",r:1},{h:"orders",r:1},{h:"revenue",r:1}],
+    [{h:"date"},{h:"channel"},{h:"listing",r:1},{h:"clicks",r:1},{h:"impr.",r:1},{h:"spend",r:1},{h:"orders",r:1},{h:"revenue",r:1},{h:"ROAS",r:1}],
     d.adsDaily,
-    r => [date(r.stat_date), r.listing_id == 0 ? "ALL" : num(r.listing_id), num(r.clicks), num(r.impressions), num(r.spend), num(r.orders_from_ads), num(r.revenue_from_ads)]
+    r => {
+      const roas = r.spend > 0 ? (r.revenue_from_ads / r.spend).toFixed(2) : "—";
+      return [date(r.stat_date), esc(r.channel ?? "unknown"), r.listing_id == 0 ? "ALL" : num(r.listing_id), num(r.clicks), num(r.impressions), num(r.spend), num(r.orders_from_ads), num(r.revenue_from_ads), roas];
+    }
   ));
 
   put("stats", table(
