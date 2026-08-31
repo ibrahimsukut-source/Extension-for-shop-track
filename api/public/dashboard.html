@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Etsy Shop Tracker — Live Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #171b21; --panel2: #1d232b; --line: #2a323c;
+    --fg: #e7edf3; --muted: #93a1b0; --accent: #4c8dff; --good: #37c98b; --warn: #e0a33e; --bad: #e5646e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); }
+  header h1 { font-size: 16px; margin: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .muted { color: var(--muted); }
+  main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .tile .v { font-size: 26px; font-weight: 650; }
+  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 18px; overflow: hidden; }
+  section > h2 { font-size: 13px; margin: 0; padding: 11px 16px; border-bottom: 1px solid var(--line); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .body { padding: 6px 0; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 16px; border-bottom: 1px solid var(--panel2); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  .r { text-align: right; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--panel2); }
+  .pill.price_change, .pill.price_changed { color: var(--accent); }
+  .pill.deactivated, .pill.listing_deactivated, .pill.bad { color: var(--bad); }
+  .pill.activated, .pill.listing_reactivated, .pill.etsy_ads_on, .pill.good { color: var(--good); }
+  .pill.etsy_ads_off { color: var(--bad); }
+  .pill.tag_change, .pill.tags_changed, .pill.photo_changed, .pill.title_change, .pill.title_changed, .pill.quantity_changed, .pill.state_changed, .pill.ad_budget_changed { color: var(--warn); }
+  .ledger h2 { color: var(--accent); }
+  .mag.up { color: var(--good); } .mag.down { color: var(--bad); }
+  .empty { padding: 16px; color: var(--muted); }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 780px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .effects h2 { color: var(--accent); }
+  .effect-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 14px 16px; }
+  .effect-card { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .effect-card .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .effect-card .entity { color: var(--muted); font-size: 12px; }
+  .effect-card .delta { font-size: 24px; font-weight: 650; margin: 4px 0; }
+  .effect-card .delta.up { color: var(--good); } .effect-card .delta.down { color: var(--bad); }
+  .effect-card .metric-line { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: var(--panel); border: 1px solid var(--line); }
+  .badge.did { color: var(--accent); border-color: var(--accent); }
+  .badge.its { color: var(--muted); }
+  .badge.conf-medium { color: var(--good); border-color: var(--good); }
+  .badge.conf-low { color: var(--warn); border-color: var(--warn); }
+  .caveats { margin: 8px 0 0; padding-left: 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .caveats li { margin-bottom: 2px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>Etsy Shop Tracker</h1>
+  <span class="muted" id="status">connecting…</span>
+  <span style="margin-left:auto"></span>
+  <a id="exportMd" href="#" target="_blank" class="muted" style="text-decoration:none;border:1px solid var(--line);padding:3px 9px;border-radius:6px;font-size:12px;">AI Özeti (Markdown)</a>
+  <a id="exportJson" href="#" target="_blank" class="muted" style="text-decoration:none;border:1px solid var(--line);padding:3px 9px;border-radius:6px;font-size:12px;">JSON</a>
+</header>
+<main>
+  <div class="tiles" id="tiles"></div>
+
+  <section class="ledger">
+    <h2>Müdahale Defteri — what I did (interventions)</h2>
+    <div class="body"><div id="ledger" class="empty">no interventions detected yet — needs ≥2 snapshots of a listing so a change can be diffed</div></div>
+  </section>
+
+  <section class="effects">
+    <h2>Etki Kartları — what happened as a result (effect cards)</h2>
+    <div id="effects" class="empty">no effects computed yet — needs ≥1 intervention with enough before/after metric history (14 days each side)</div>
+  </section>
+
+  <section class="ask">
+    <h2>AI'ya Sor — ask a question about your shop (Claude)</h2>
+    <div class="body">
+      <div class="empty" id="askDisabled" hidden>AI soru-cevap özelliği kapalı. Açmak için <code>.env</code> dosyasına <code>ANTHROPIC_API_KEY</code> ekleyip sunucuyu yeniden başlatın.</div>
+      <div id="askEnabledBox" hidden style="padding:14px 16px;">
+        <textarea id="askInput" rows="2" placeholder="Örn: Fiyat değişikliği gerçekten işe yaradı mı?" style="width:100%;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;resize:vertical;"></textarea>
+        <div style="margin-top:8px;display:flex;gap:10px;align-items:center;">
+          <button id="askBtn" style="background:var(--accent);color:#fff;border:0;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:13px;">Sor</button>
+          <span id="askStatus" class="muted" style="font-size:12px;"></span>
+        </div>
+        <div id="askAnswer" style="margin-top:12px;white-space:pre-wrap;line-height:1.6;font-size:13px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Strateji Paneli — müdahale tipi → ortalama etki (event study)</h2>
+    <div class="body"><div id="strategy" class="empty">no pooled effects yet</div></div>
+  </section>
+
+  <section>
+    <h2>Değişim Noktaları — shop-level shifts not tied to any logged intervention</h2>
+    <div class="body"><div id="changepoints" class="empty">no change points detected yet</div></div>
+  </section>
+
+  <section>
+    <h2>Etsy Ads — daily (clicks / impressions / spend / revenue)</h2>
+    <div class="body"><div id="ads" class="empty">no ads data yet</div></div>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Shop stats — daily</h2>
+      <div class="body"><div id="stats" class="empty">no stats yet</div></div>
+    </section>
+    <section>
+      <h2>Derived events (what changed)</h2>
+      <div class="body"><div id="events" class="empty">no events yet</div></div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section>
+      <h2>Top listings by revenue</h2>
+      <div class="body"><div id="top" class="empty">no listing stats yet</div></div>
+    </section>
+    <section>
+      <h2>Recent listing snapshots</h2>
+      <div class="body"><div id="snaps" class="empty">no snapshots yet</div></div>
+    </section>
+  </div>
+
+  <section>
+    <h2>Capture pipeline (raw → parsed)</h2>
+    <div class="body"><div id="captures" class="empty">nothing captured yet</div></div>
+  </section>
+</main>
+
+<script>
+const KEY = new URLSearchParams(location.search).get("key");
+function summaryUrl(format) {
+  const params = new URLSearchParams();
+  if (KEY) params.set("key", KEY);
+  params.set("format", format);
+  return "/analysis/summary?" + params.toString();
+}
+document.getElementById("exportMd").href = summaryUrl("md");
+document.getElementById("exportJson").href = summaryUrl("json");
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
+const num = (n) => n == null ? "—" : Number(n).toLocaleString();
+const money = (n, c) => n == null ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:2}) + (c ? " " + c : "");
+const date = (s) => s ? String(s).slice(0, 10) : "—";
+const dt = (s) => s ? String(s).replace("T"," ").slice(0,16) : "—";
+// Compact rendering of an intervention before/after value (scalar, tag array,
+// or a photo {num,hashes} object).
+function ivVal(v) {
+  if (v == null) return "—";
+  if (Array.isArray(v)) return v.length + " tags";
+  if (typeof v === "object") return v.num != null ? v.num + " imgs" : JSON.stringify(v);
+  return String(v);
+}
+
+function table(cols, rows, render) {
+  if (!rows || !rows.length) return null;
+  const head = "<tr>" + cols.map(c => `<th class="${c.r?'r':''}">${esc(c.h)}</th>`).join("") + "</tr>";
+  const body = rows.map(r => "<tr>" + render(r).map((cell,i) => `<td class="${cols[i].r?'r':''}">${cell}</td>`).join("") + "</tr>").join("");
+  const t = document.createElement("table");
+  t.innerHTML = head + body;
+  return t;
+}
+function put(id, el) { const c = $(id); c.innerHTML = ""; if (el) c.appendChild(el); else c.innerHTML = '<div class="empty">—</div>'; }
+
+// Turkish labels for what a metric name means, for the card's small print.
+const METRIC_LABEL = { views: "görüntülenme", visits: "ziyaret", orders: "sipariş", revenue: "gelir", conversion_rate: "dönüşüm oranı" };
+const ENTITY_LABEL = { listing: "ürün", shop: "mağaza geneli", ad: "reklam", conversation: "mesaj" };
+
+function renderEffects(effects) {
+  const el = $("effects");
+  if (!effects || !effects.length) { el.innerHTML = '<div class="empty">no effects computed yet — needs ≥1 intervention with enough before/after metric history (14 days each side)</div>'; return; }
+  el.innerHTML = '<div class="effect-cards"></div>';
+  const grid = el.querySelector(".effect-cards");
+  for (const r of effects) {
+    const pe = r.point_estimate == null ? null : Number(r.point_estimate);
+    const cls = pe == null ? "" : (pe > 0 ? "up" : (pe < 0 ? "down" : ""));
+    const sign = pe != null && pe > 0 ? "+" : "";
+    const deltaTxt = pe == null ? "—" : sign + pe.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    const entity = r.entity_type === "shop" ? ENTITY_LABEL.shop : `${ENTITY_LABEL[r.entity_type] ?? r.entity_type} #${esc(r.entity_id)}`;
+    const metricLabel = METRIC_LABEL[r.metric] ?? r.metric;
+    const caveats = Array.isArray(r.caveats) ? r.caveats : [];
+    const card = document.createElement("div");
+    card.className = "effect-card";
+    card.innerHTML = `
+      <div class="top">
+        <span class="pill ${esc(r.intervention_type)}">${esc(r.intervention_type)}</span>
+        <span class="badge ${esc(r.method)}">${r.method === "did" ? "DiD · kontrol düzeltmeli" : "ITS · öncesi/sonrası"}</span>
+      </div>
+      <div class="entity">${entity} · ${dt(r.occurred_at)}</div>
+      <div class="delta ${cls}">${deltaTxt}</div>
+      <div class="metric-line">${esc(metricLabel)} · ${esc(r.effect_window)} · <span class="badge conf-${esc(r.confidence_label)}">güven: ${esc(r.confidence_label)}</span></div>
+      <ul class="caveats">${caveats.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function render(d) {
+  const t = d.totals;
+  $("tiles").innerHTML = [
+    ["interventions", num(t.interventions)], ["effects", num(t.effects)], ["metric points", num(t.metricPoints)],
+    ["shops", d.shops.length], ["captures", num(t.rawCaptures)], ["parsed", num(t.parsed)],
+    ["snapshots", num(t.snapshots)], ["events", num(t.events)], ["msg threads", num(d.messages.threads)],
+  ].map(([k,v]) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+
+  renderEffects(d.effects);
+
+  put("strategy", table(
+    [{h:"intervention"},{h:"metric"},{h:"n",r:1},{h:"ort. etki (Δ)",r:1},{h:"std",r:1},{h:"kontrollü",r:1},{h:"medium/low",r:1}],
+    d.strategyPanel,
+    r => {
+      const me = Number(r.meanEffect);
+      const cls = me > 0 ? "up" : (me < 0 ? "down" : "");
+      const sign = me > 0 ? "+" : "";
+      return [
+        `<span class="pill ${esc(r.interventionType)}">${esc(r.interventionType)}</span>`,
+        esc(METRIC_LABEL[r.metric] ?? r.metric),
+        num(r.n),
+        `<span class="mag ${cls}">${sign}${me.toLocaleString(undefined,{maximumFractionDigits:2})}</span>`,
+        r.stdDev == null ? "—" : Number(r.stdDev).toLocaleString(undefined,{maximumFractionDigits:2}),
+        `${r.nControlAdjusted}/${r.n}`,
+        `${r.nMedium}/${r.nLow}`,
+      ];
+    }
+  ));
+
+  put("changepoints", table(
+    [{h:"date"},{h:"shop"},{h:"metric"},{h:"before",r:1},{h:"after",r:1},{h:"Δ%",r:1}],
+    d.changePoints,
+    r => {
+      const relPct = r.relDelta == null ? "—" : (r.relDelta * 100).toFixed(0) + "%";
+      const cls = r.direction === "up" ? "up" : "down";
+      return [
+        date(r.date), esc(r.shopTag ?? r.shopId), esc(METRIC_LABEL[r.metric] ?? r.metric),
+        Number(r.before).toLocaleString(undefined,{maximumFractionDigits:2}),
+        Number(r.after).toLocaleString(undefined,{maximumFractionDigits:2}),
+        `<span class="mag ${cls}">${r.direction === "up" ? "+" : ""}${relPct}</span>`,
+      ];
+    }
+  ));
+
+  put("ledger", table(
+    [{h:"when"},{h:"intervention"},{h:"listing"},{h:"change"},{h:"Δ",r:1},{h:"conf.",r:1}],
+    d.interventions,
+    r => {
+      const m = r.magnitude == null ? "" : Number(r.magnitude);
+      const magCls = m === "" ? "" : (m > 0 ? "up" : (m < 0 ? "down" : ""));
+      const magTxt = m === "" ? "—" : (m > 0 ? "+" : "") + m.toLocaleString(undefined,{maximumFractionDigits:2});
+      return [
+        dt(r.occurred_at),
+        `<span class="pill ${esc(r.intervention_type)}">${esc(r.intervention_type)}</span>`,
+        esc(r.entity_id),
+        `<code>${esc(ivVal(r.before_value))}</code> → <code>${esc(ivVal(r.after_value))}</code>`,
+        `<span class="mag ${magCls}">${magTxt}</span>`,
+        r.confidence == null ? "—" : Number(r.confidence).toFixed(2),
+      ];
+    }
+  ));
+
+  put("ads", table(
+    [{h:"date"},{h:"channel"},{h:"listing",r:1},{h:"clicks",r:1},{h:"impr.",r:1},{h:"spend",r:1},{h:"orders",r:1},{h:"revenue",r:1},{h:"ROAS",r:1}],
+    d.adsDaily,
+    r => {
+      const roas = r.spend > 0 ? (r.revenue_from_ads / r.spend).toFixed(2) : "—";
+      return [date(r.stat_date), esc(r.channel ?? "unknown"), r.listing_id == 0 ? "ALL" : num(r.listing_id), num(r.clicks), num(r.impressions), num(r.spend), num(r.orders_from_ads), num(r.revenue_from_ads), roas];
+    }
+  ));
+
+  put("stats", table(
+    [{h:"date"},{h:"visits",r:1},{h:"views",r:1},{h:"orders",r:1},{h:"revenue",r:1},{h:"conv.",r:1}],
+    d.statsDaily,
+    r => [date(r.stat_date), num(r.visits), num(r.views), num(r.orders), money(r.revenue, r.currency), r.conversion_rate == null ? "—" : (r.conversion_rate*100).toFixed(2)+"%"]
+  ));
+
+  put("events", table(
+    [{h:"when"},{h:"event"},{h:"listing"},{h:"change"}],
+    d.recentEvents,
+    r => [dt(r.occurred_at), `<span class="pill ${esc(r.event_type)}">${esc(r.event_type)}</span>`, esc(r.entity_id),
+          `<code>${esc(JSON.stringify(r.payload?.old))}</code> → <code>${esc(JSON.stringify(r.payload?.new))}</code>`]
+  ));
+
+  put("top", table(
+    [{h:"listing"},{h:"revenue",r:1},{h:"orders",r:1},{h:"visits",r:1}],
+    d.topListings,
+    r => [num(r.listing_id), num(r.revenue), num(r.orders), num(r.visits)]
+  ));
+
+  put("snaps", table(
+    [{h:"when"},{h:"listing"},{h:"state"},{h:"price",r:1},{h:"imgs",r:1}],
+    d.recentSnapshots,
+    r => [dt(r.captured_at), num(r.listing_id), `<span class="pill ${r.state==='active'?'good':(r.state==='inactive'?'bad':'')}">${esc(r.state)}</span>`, num(r.price), num(r.num_images)]
+  ));
+
+  put("captures", table(
+    [{h:"type"},{h:"raw",r:1},{h:"parsed",r:1}],
+    d.captureTypes,
+    r => [esc(r.capture_type), num(r.n), num(r.parsed)]
+  ));
+}
+
+async function tick() {
+  try {
+    const res = await fetch("/dashboard/data" + (KEY ? "?key=" + encodeURIComponent(KEY) : ""));
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    render(d);
+    $("dot").style.background = "var(--good)";
+    $("status").textContent = "live · updated " + new Date(d.generatedAt).toLocaleTimeString();
+  } catch (e) {
+    $("dot").style.background = "var(--bad)";
+    $("status").textContent = "disconnected (" + e.message + ") — is the API running?";
+  }
+}
+tick();
+setInterval(tick, 4000);
+
+// ── AI'ya Sor (spec §9 NL question interface) ───────────────────────────────
+async function initAsk() {
+  try {
+    const res = await fetch("/analysis/ask/status" + (KEY ? "?key=" + encodeURIComponent(KEY) : ""));
+    const data = await res.json();
+    $(data.enabled ? "askEnabledBox" : "askDisabled").hidden = false;
+  } catch (e) {
+    $("askDisabled").hidden = false;
+  }
+}
+async function submitAsk() {
+  const question = $("askInput").value.trim();
+  if (!question) return;
+  const btn = $("askBtn");
+  btn.disabled = true;
+  $("askStatus").textContent = "düşünüyor…";
+  $("askAnswer").textContent = "";
+  try {
+    const res = await fetch("/analysis/ask" + (KEY ? "?key=" + encodeURIComponent(KEY) : ""), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    const data = await res.json();
+    if (data.answer) {
+      $("askAnswer").textContent = data.answer;
+      $("askStatus").textContent = "";
+    } else {
+      $("askStatus").textContent = data.error || "bilinmeyen hata";
+    }
+  } catch (e) {
+    $("askStatus").textContent = "bağlantı hatası: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+$("askBtn").addEventListener("click", submitAsk);
+$("askInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submitAsk();
+});
+initAsk();
+</script>
+</body>
+</html>

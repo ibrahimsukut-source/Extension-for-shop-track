@@ -1,0 +1,29 @@
+{
+  "$comment": "Config-driven endpoint classification, tuned from real OrnamentsPoint (shop 32467610) captures. Etsy uses /api/v3/ajax/shop/{id}/... (singular 'shop'). '*' is a wildcard; matching is case-insensitive and substring-based; FIRST matching pattern wins, so ads patterns precede listing (promoted-listing URLs contain 'listings'). Observe new paths via the extension's discovery mode and add them here.",
+  "patterns": [
+    { "match": "*/prolist*", "type": "ads" },
+    { "match": "*/offsite-ads*", "type": "ads" },
+    { "match": "*/offsite_ads*", "type": "ads" },
+    { "match": "*/etsyads*", "type": "ads" },
+    { "match": "*/advertising*", "type": "ads" },
+
+    { "match": "*/conversations*", "type": "messages" },
+    { "match": "*/messages*", "type": "messages" },
+
+    { "match": "*/receipts*", "type": "order" },
+    { "match": "*/orders*", "type": "order" },
+
+    { "match": "*/reviews*", "type": "review" },
+
+    { "match": "*/shop-analytics-stats*", "type": "stats" },
+    { "match": "*/stats/slim-stats*", "type": "stats" },
+    { "match": "*/stats/dashboard-listing*", "type": "stats" },
+    { "match": "*/stats/traffic-detail*", "type": "stats" },
+    { "match": "/api/v3/ajax/bespoke/member/shops/*/stats*", "type": "stats" },
+    { "match": "*/shop/*/dashboard", "type": "stats" },
+    { "match": "*/shop/*/summary", "type": "stats" },
+
+    { "match": "*/listings*", "type": "listing" },
+    { "match": "*/inventory*", "type": "listing" }
+  ]
+}

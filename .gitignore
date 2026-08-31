@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+*.tsbuildinfo
+
+# Exception: ship a prebuilt extension so non-developers can install it without
+# Node/npm (download the repo ZIP -> Load unpacked on extension/dist).
+!extension/dist/
+!extension/dist/**
+
+# Env / secrets (never commit ingestion tokens — spec section 9)
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
