@@ -27,6 +27,12 @@ export interface Settings {
   captureAll: boolean;
   /** Command-center agent: poll for jobs and run them (needs apiHost + apiToken). */
   agentEnabled: boolean;
+  /**
+   * Legacy passive capture: wraps the page's own window.fetch/XHR while you browse.
+   * OFF by default — a wrapped fetch is visible to Etsy's JavaScript and would be
+   * the same in every shop (rule #1). The agent collects actively without it.
+   */
+  passiveCapture: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -38,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   forwardEnabled: false,
   captureAll: false,
   agentEnabled: true,
+  passiveCapture: false,
 };
 
 const KEY = "settings";

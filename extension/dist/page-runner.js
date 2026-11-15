@@ -1,8 +1,8 @@
-/*! oc-runner 2026.11.16-1 */
+/*! oc-runner 2026.11.16-2 */
 "use strict";
 (() => {
   // src/agent/version.ts
-  var RUNNER_VERSION = "2026.11.16-1";
+  var RUNNER_VERSION = "2026.11.16-2";
 
   // src/agent/page-runner.ts
   var AgentError = class extends Error {
@@ -12,8 +12,69 @@
     }
   };
   var W = globalThis;
+  function sliceObject(text, start) {
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) return text.slice(start, i + 1);
+      }
+    }
+    return null;
+  }
+  function parseEtsyContext(scripts) {
+    const ctxObj = {};
+    const re = /Etsy\.Context(?:\.(\w+))?\s*=\s*(?!Etsy\.Context\s*\|\|)/g;
+    for (const text of scripts) {
+      if (!text.includes("Etsy.Context")) continue;
+      re.lastIndex = 0;
+      let m;
+      while (m = re.exec(text)) {
+        let i = m.index + m[0].length;
+        let found = -1;
+        for (let guard = 0; guard < 400 && i < text.length; guard++) {
+          const j = text.indexOf("{", i);
+          if (j < 0 || j - (m.index + m[0].length) > 400) break;
+          if (/^\{\s*"/.test(text.slice(j, j + 40))) {
+            found = j;
+            break;
+          }
+          i = j + 1;
+        }
+        if (found < 0) continue;
+        const raw = sliceObject(text, found);
+        if (!raw) continue;
+        let obj;
+        try {
+          obj = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+        if (m[1]) ctxObj[m[1]] = Object.assign(ctxObj[m[1]] ?? {}, obj);
+        else for (const [k, v] of Object.entries(obj)) ctxObj[k] = k === "data" && ctxObj.data ? Object.assign(ctxObj.data, v) : v;
+        re.lastIndex = found + raw.length;
+      }
+    }
+    return ctxObj;
+  }
+  var ctxCache = null;
   function ctx() {
-    const d = W.Etsy?.Context?.data;
+    if (!ctxCache) {
+      const scripts = Array.from(document.querySelectorAll("script:not([src])"), (s) => s.textContent ?? "");
+      ctxCache = parseEtsyContext(scripts);
+    }
+    const d = ctxCache?.data;
     if (!d) {
       if (/\/signin/.test(location.pathname)) throw new AgentError("not_logged_in", "Etsy oturumu kapal\u0131");
       throw new AgentError("wrong_page", "Etsy.Context bulunamad\u0131");
@@ -46,7 +107,10 @@
     return v;
   }
   var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  var jitter = (min, max) => sleep(min + Math.random() * (max - min));
+  var TEMPO = 0.7 + Math.random() * 0.9;
+  var jitter = (min, max) => sleep((min + Math.random() * (max - min)) * TEMPO);
+  var pick = (xs) => xs[Math.floor(Math.random() * xs.length)];
+  var PAGE_SIZE = pick([25, 30, 40, 50, 60, 75, 100]);
   function qs(q) {
     if (!q) return "";
     const p = new URLSearchParams();
@@ -141,7 +205,7 @@
   var mdy = (iso) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
   async function allListingStats(c, r, isPromoted, cap = 6e3) {
     const out = [];
-    const limit = 100;
+    const limit = PAGE_SIZE;
     for (let offset = 0; offset < cap; ) {
       const page = await c.getC("/prolist/stats/listings", {
         start_date: r.start,
@@ -174,9 +238,17 @@
       comparison_end_date: pr.end
     });
     await jitter(300, 800);
-    const promoted = await allListingStats(c, r, true);
-    await jitter(400, 1e3);
-    const notPromoted = await allListingStats(c, r, false);
+    let promoted;
+    let notPromoted;
+    if (Math.random() < 0.5) {
+      promoted = await allListingStats(c, r, true);
+      await jitter(400, 1e3);
+      notPromoted = await allListingStats(c, r, false);
+    } else {
+      notPromoted = await allListingStats(c, r, false);
+      await jitter(400, 1e3);
+      promoted = await allListingStats(c, r, true);
+    }
     const seen = /* @__PURE__ */ new Set();
     const listings = [...promoted, ...notPromoted].filter((e) => {
       const id = Number(e?.listing?.listingId);

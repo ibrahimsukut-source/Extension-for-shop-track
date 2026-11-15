@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Etsy Shop Agent",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Etsy mağaza ajanı: Etsy Ads ve Stats verisini komuta merkezine raporlar, onaylanan reklam talimatlarını uygular.",
   "permissions": [
     "storage",
@@ -26,29 +26,6 @@
     "page": "options.html",
     "open_in_tab": true
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.etsy.com/*"
-      ],
-      "js": [
-        "interceptor.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": [
-        "https://www.etsy.com/*"
-      ],
-      "js": [
-        "bridge.js",
-        "actions.js"
-      ],
-      "run_at": "document_start",
-      "world": "ISOLATED"
-    }
-  ],
   "minimum_chrome_version": "120",
   "storage": {
     "managed_schema": "managed_schema.json"

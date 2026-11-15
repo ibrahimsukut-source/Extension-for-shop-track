@@ -53,6 +53,10 @@
         <input id="agentEnabled" type="checkbox" />
         <label for="agentEnabled" style="margin: 0; font-weight: 400">Merkezden iş al ve uygula (API host + token gerekli)</label>
       </div>
+      <div class="row">
+        <input id="passiveCapture" type="checkbox" />
+        <label for="passiveCapture" style="margin: 0; font-weight: 400">Pasif yakalama (gezinirken Etsy isteklerini kaydet) — önerilmez: sayfanın fetch fonksiyonunu değiştirir, Etsy görebilir</label>
+      </div>
       <pre id="agentStatus" style="font-size:12px;white-space:pre-wrap;background:rgba(127,127,127,.12);padding:8px;border-radius:6px">…</pre>
       <button id="agentRun">Şimdi kontrol et</button>
       <p class="hint" id="managedHint"></p>

@@ -39,7 +39,8 @@ const listingRow = (id) => ({
 });
 function page(initialData) {
   return `<!doctype html><html><head><meta name="csrf_nonce" content="csrf-xyz"></head><body>fake shop manager
-  <script>window.Etsy={Context:{data:{shop_id:${SHOP},shop_name:"FakeShop",locale_settings:{currency:{code:"USD"},language:{code:"en-US"}},initial_data:${JSON.stringify(initialData)}}}};</script></body></html>`;
+  <script>window.Etsy=window.Etsy||{};Etsy.Context = ${JSON.stringify({ page: null, data: { shop_id: SHOP, shop_name: "FakeShop", locale_settings: { currency: { code: "USD" }, language: { code: "en-US" } }, initial_data: initialData } })};</script>
+  <script>window.__nativeFetch = window.fetch;</script></body></html>`;
 }
 async function fakeEtsy(route) {
   const req = route.request();
@@ -47,7 +48,7 @@ async function fakeEtsy(route) {
   const json = (b, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(b) });
   const p = url.pathname;
   if (p === "/your/shops/me/dashboard" || p === "/your/shops/me/advertising") {
-    return route.fulfill({ contentType: "text/html", body: page({ etsyAds: { campaignMinBudget: { budgetInCents: 100 }, campaignMaxBudget: { budgetInCents: 20000 }, promotedListingsCount: 2 } }) });
+    return route.fulfill({ contentType: "text/html", headers: { "set-cookie": "session-key=fake-session; Path=/; Secure; SameSite=Lax" }, body: page({ etsyAds: { campaignMinBudget: { budgetInCents: 100 }, campaignMaxBudget: { budgetInCents: 20000 }, promotedListingsCount: 2 } }) });
   }
   if (p === "/your/shops/me/stats") {
     return route.fulfill({
@@ -63,6 +64,12 @@ async function fakeEtsy(route) {
     });
   }
   const api = `/api/v3/ajax/shop/${SHOP}`;
+  if (p.startsWith("/api/")) {
+    // The agent's calls must carry the seller's own session cookie, like Etsy's front end.
+    if (!/session-key=fake-session/.test(req.headers()["cookie"] || (await req.allHeaders())["cookie"] || "")) {
+      return route.fulfill({ status: 401, contentType: "application/json", body: '{"error":"no session"}' });
+    }
+  }
   if (p === `${api}/prolist/campaign`) return json({ total_daily_budget: 5000, is_active: true, status: 1 });
   if (p === `${api}/prolist/stats`) {
     return json({ granularity: "day", graph_stats: [{ impression_count: 333, click_count: 1, spent_total: 108, conversions: 1, revenue: 1850, roas: 17.13, timestamp: 1792123200 }], total_stats: { impression_count: 3000, click_count: 30, spent_total: 3600, conversions: 4, revenue: 10000 } });
@@ -160,6 +167,14 @@ try {
   const ov = await center("/admin/v1/overview");
   assert.equal(ov.shops[0].agent.shop_name, "FakeShop");
   assert.equal(ov.shops[0].agent.logged_in, true);
+
+  // Rule #1: nothing from the agent is visible in Etsy's page world.
+  const worker = ctx.pages().find((p) => p.url().startsWith("https://www.etsy.com/"));
+  const leak = await worker.evaluate(() => ({
+    global: "__ocAgent" in window,
+    fetchPatched: window.fetch !== window.__nativeFetch || !/\[native code\]/.test(Function.prototype.toString.call(window.fetch)),
+  }));
+  assert.deepEqual(leak, { global: false, fetchPatched: false }, "agent must not leave traces in the page world");
 
   // 2) A write: turn the ad off for listing 102 (the one spending with 0 orders).
   const sugg = (await center("/admin/v1/suggestions?shop_tag=fake-shop")).suggestions;

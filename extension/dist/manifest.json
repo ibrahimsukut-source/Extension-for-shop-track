@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Etsy Shop Agent",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Etsy mağaza ajanı: Etsy Ads ve Stats verisini komuta merkezine raporlar, onaylanan reklam talimatlarını uygular.",
   "permissions": [
     "storage",
@@ -26,31 +26,10 @@
     "page": "options.html",
     "open_in_tab": true
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.etsy.com/*"
-      ],
-      "js": [
-        "interceptor.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": [
-        "https://www.etsy.com/*"
-      ],
-      "js": [
-        "bridge.js",
-        "actions.js"
-      ],
-      "run_at": "document_start",
-      "world": "ISOLATED"
-    }
-  ],
   "minimum_chrome_version": "120",
   "storage": {
     "managed_schema": "managed_schema.json"
-  }
+  },
+  "update_url": "https://magaza-crm.fly.dev/ext/updates.xml",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx+lsdox1Pvw8/crUk9VHWFhM2AiyjcPWMe+0WS9ADW6+/sUKhvR+2YWtCTCSno1aXkoVlwDmapLsSSpVIlFeTiEpr1TqZWMeJmpHuKiZloIi/ZqWio0ztOvwpb8l56rJYV4aeTvsrkDbJrXjhItgwwoWh3yTY4WGAreGdhQtKyezcXADsES6CdSqO6QiCSTanrsQsFedm1Q2iia4s6A4a6jXY2r9dsM2oZDD1LK0CrOozSAshDfK+JN+8S9WAmpgWkbhRw/6Owbn2OXtYeoHaCjdYguEQMsJBotGsZTTloorZEHt3aVSYZ0ZKJk7xdEPkSaRs9XnahYU1QAyoIyJeQIDAQAB"
 }

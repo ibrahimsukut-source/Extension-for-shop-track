@@ -41,7 +41,11 @@ function buildTestExtension() {
   const m = JSON.parse(readFileSync(manifestPath, "utf8"));
   const local = "http://127.0.0.1:*/*";
   m.host_permissions.push(local);
-  for (const cs of m.content_scripts) cs.matches.push(local);
+  // Passive capture is opt-in at runtime (rule #1); register it statically for this test.
+  m.content_scripts = [
+    { matches: ["https://www.etsy.com/*", local], js: ["interceptor.js"], run_at: "document_start", world: "MAIN" },
+    { matches: ["https://www.etsy.com/*", local], js: ["bridge.js", "actions.js"], run_at: "document_start", world: "ISOLATED" },
+  ];
   writeFileSync(manifestPath, JSON.stringify(m, null, 2));
   return dir;
 }

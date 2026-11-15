@@ -153,18 +153,33 @@ function userScriptsAvailable(): boolean {
   }
 }
 
-async function injectRunner(tabId: number): Promise<string> {
+/**
+ * Runs the job in the worker tab. Never in the page's MAIN world (rule #1):
+ *  - remote module → chrome.userScripts in the USER_SCRIPT world (isolated from the page),
+ *    loaded and invoked in a single injection;
+ *  - built-in runner → the extension's ISOLATED content-script world.
+ */
+async function executeJob(tabId: number, job: { id: number; kind: string; params: Record<string, unknown> }): Promise<RunOutcome & { runner: string }> {
   const mod = (await chrome.storage.local.get(MODULE_KEY))[MODULE_KEY] as StoredModule | undefined;
   if (mod && userScriptsAvailable()) {
     try {
-      await (chrome.userScripts as any).execute({ target: { tabId }, js: [{ code: mod.code }], world: "MAIN", injectImmediately: true });
-      return mod.version;
+      const code = `${mod.code}\n;globalThis.__ocAgent.run(${JSON.stringify(job)});`;
+      const [res] = await (chrome.userScripts as any).execute({ target: { tabId }, js: [{ code }], world: "USER_SCRIPT", injectImmediately: true });
+      const out = res?.result as RunOutcome | undefined;
+      if (out && typeof out.ok === "boolean") return { ...out, runner: mod.version };
+      console.warn("[agent] remote module returned no outcome, using built-in runner");
     } catch (e) {
-      console.warn("[agent] remote module injection failed, using built-in runner", e);
+      console.warn("[agent] remote module failed, using built-in runner", e);
     }
   }
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["page-runner.js"], world: "MAIN" });
-  return `builtin ${RUNNER_VERSION}`;
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["page-runner.js"], world: "ISOLATED" });
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "ISOLATED",
+    func: (j: unknown) => (globalThis as any).__ocAgent.run(j),
+    args: [job],
+  });
+  return { ...((res?.result as RunOutcome) ?? { ok: false, error: "boş sonuç" }), runner: `builtin ${RUNNER_VERSION}` };
 }
 
 async function runInTab(job: { id: number; kind: string; params: Record<string, unknown> }): Promise<RunOutcome & { runner: string }> {
@@ -175,17 +190,10 @@ async function runInTab(job: { id: number; kind: string; params: Record<string, 
   if (tab.url && /\/signin/.test(tab.url)) {
     return { ok: false, code: "not_logged_in", error: "Etsy oturumu kapalı (giriş sayfasına yönlendirildi)", runner: "-" };
   }
-  const runner = await injectRunner(tabId);
   // Keep the service worker alive while a long collection runs in the page.
   const keepAlive = setInterval(() => void chrome.runtime.getPlatformInfo(), 20_000);
   try {
-    const [res] = await chrome.scripting.executeScript({
-      target: { tabId },
-      world: "MAIN",
-      func: (j: unknown) => (globalThis as any).__ocAgent.run(j),
-      args: [job],
-    });
-    return { ...((res?.result as RunOutcome) ?? { ok: false, error: "boş sonuç" }), runner };
+    return await executeJob(tabId, job);
   } finally {
     clearInterval(keepAlive);
   }

@@ -9,7 +9,8 @@
     chromeProfile: "",
     forwardEnabled: false,
     captureAll: false,
-    agentEnabled: true
+    agentEnabled: true,
+    passiveCapture: false
   };
   var KEY = "settings";
   async function getManaged() {
@@ -78,7 +79,8 @@
     apiToken: $("apiToken"),
     forwardEnabled: $("forwardEnabled"),
     captureAll: $("captureAll"),
-    agentEnabled: $("agentEnabled")
+    agentEnabled: $("agentEnabled"),
+    passiveCapture: $("passiveCapture")
   };
   async function load() {
     const s = await getSettings();
@@ -90,6 +92,7 @@
     fields.forwardEnabled.checked = s.forwardEnabled;
     fields.captureAll.checked = s.captureAll;
     fields.agentEnabled.checked = s.agentEnabled;
+    fields.passiveCapture.checked = s.passiveCapture;
     const locked = await managedKeys();
     for (const k of locked) {
       const el = fields[k];
@@ -153,7 +156,8 @@
       apiToken: fields.apiToken.value.trim(),
       forwardEnabled: fields.forwardEnabled.checked,
       captureAll: fields.captureAll.checked,
-      agentEnabled: fields.agentEnabled.checked
+      agentEnabled: fields.agentEnabled.checked,
+      passiveCapture: fields.passiveCapture.checked
     };
     if (patch.forwardEnabled && patch.apiHost) await ensureApiPermission(patch.apiHost);
     await saveSettings(patch);

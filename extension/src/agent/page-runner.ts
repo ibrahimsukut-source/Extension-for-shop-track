@@ -1,5 +1,14 @@
-// Page runner — executes one command-center job INSIDE an Etsy Shop Manager tab
-// (MAIN world), using the seller's own session exactly like Etsy's front end.
+// Page runner — executes one command-center job inside an Etsy Shop Manager tab,
+// using the seller's own session.
+//
+// RULE #1 (never break): nothing Etsy's own JavaScript can observe may differ
+// from a normal seller browser, and nothing may be identical across shops.
+// So this runs in the extension's ISOLATED world (or the USER_SCRIPT world for
+// remote modules): the page cannot see our globals, our fetch calls are not
+// routed through the page's (possibly instrumented) window.fetch, and we never
+// touch page objects. Etsy.Context is read by parsing the page's own inline
+// <script> text, not via window.Etsy. Pacing, page sizes and order of calls are
+// randomized per run so no two shops share a request rhythm.
 //
 // Self-contained on purpose (no imports): the same bundle is
 //   1. shipped inside the extension (built-in fallback), and
@@ -37,8 +46,78 @@ class AgentError extends Error {
 
 const W = globalThis as any;
 
+/** Extract the JSON object literal starting at `start` (string-aware brace matching). */
+function sliceObject(text: string, start: number): string | null {
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * Rebuild Etsy.Context from the page's inline scripts. Etsy uses two forms:
+ *   Etsy.Context = {...};                                  (whole object)
+ *   Etsy.Context.data = assign(Etsy.Context.data ? … : {}, {...});   (merge)
+ */
+export function parseEtsyContext(scripts: string[]): Json {
+  const ctxObj: Record<string, Json> = {};
+  const re = /Etsy\.Context(?:\.(\w+))?\s*=\s*(?!Etsy\.Context\s*\|\|)/g;
+  for (const text of scripts) {
+    if (!text.includes("Etsy.Context")) continue;
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      // The JSON payload is the first object literal whose first key is a string.
+      let i = m.index + m[0].length;
+      let found = -1;
+      for (let guard = 0; guard < 400 && i < text.length; guard++) {
+        const j = text.indexOf("{", i);
+        if (j < 0 || j - (m.index + m[0].length) > 400) break;
+        if (/^\{\s*"/.test(text.slice(j, j + 40))) {
+          found = j;
+          break;
+        }
+        i = j + 1;
+      }
+      if (found < 0) continue;
+      const raw = sliceObject(text, found);
+      if (!raw) continue;
+      let obj: Json;
+      try {
+        obj = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (m[1]) ctxObj[m[1]] = Object.assign(ctxObj[m[1]] ?? {}, obj);
+      else for (const [k, v] of Object.entries(obj)) ctxObj[k] = k === "data" && ctxObj.data ? Object.assign(ctxObj.data, v) : v;
+      re.lastIndex = found + raw.length;
+    }
+  }
+  return ctxObj;
+}
+
+let ctxCache: Json = null;
 function ctx() {
-  const d = W.Etsy?.Context?.data;
+  if (!ctxCache) {
+    const scripts = Array.from(document.querySelectorAll("script:not([src])"), (s) => s.textContent ?? "");
+    ctxCache = parseEtsyContext(scripts);
+  }
+  const d = ctxCache?.data;
   if (!d) {
     if (/\/signin/.test(location.pathname)) throw new AgentError("not_logged_in", "Etsy oturumu kapalı");
     throw new AgentError("wrong_page", "Etsy.Context bulunamadı");
@@ -82,7 +161,11 @@ export function camelize(v: Json): Json {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const jitter = (min: number, max: number) => sleep(min + Math.random() * (max - min));
+// Per-run tempo: each run (and so each shop) gets its own speed and rhythm.
+const TEMPO = 0.7 + Math.random() * 0.9;
+const jitter = (min: number, max: number) => sleep((min + Math.random() * (max - min)) * TEMPO);
+const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
+const PAGE_SIZE = pick([25, 30, 40, 50, 60, 75, 100]);
 
 function qs(q?: Record<string, unknown>): string {
   if (!q) return "";
@@ -187,7 +270,7 @@ const mdy = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice
 // ── Collection ────────────────────────────────────────────────────────────
 async function allListingStats(c: Caller, r: { start: string; end: string }, isPromoted: boolean, cap = 6000): Promise<Json[]> {
   const out: Json[] = [];
-  const limit = 100;
+  const limit = PAGE_SIZE;
   for (let offset = 0; offset < cap; ) {
     const page = await c.getC("/prolist/stats/listings", {
       start_date: r.start,
@@ -221,9 +304,18 @@ async function collectAds(c: Caller, d: Json, p: Json): Promise<Json> {
     comparison_end_date: pr.end,
   });
   await jitter(300, 800);
-  const promoted = await allListingStats(c, r, true);
-  await jitter(400, 1000);
-  const notPromoted = await allListingStats(c, r, false);
+  // Order varies run to run.
+  let promoted: Json[];
+  let notPromoted: Json[];
+  if (Math.random() < 0.5) {
+    promoted = await allListingStats(c, r, true);
+    await jitter(400, 1000);
+    notPromoted = await allListingStats(c, r, false);
+  } else {
+    notPromoted = await allListingStats(c, r, false);
+    await jitter(400, 1000);
+    promoted = await allListingStats(c, r, true);
+  }
   const seen = new Set<number>();
   const listings = [...promoted, ...notPromoted].filter((e) => {
     const id = Number(e?.listing?.listingId);
@@ -422,4 +514,5 @@ export async function run(job: Job): Promise<RunOutcome> {
   }
 }
 
+// Lives only in the extension's isolated world — invisible to Etsy's scripts.
 W.__ocAgent = { version: RUNNER_VERSION, run };

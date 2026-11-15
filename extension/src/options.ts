@@ -14,6 +14,7 @@ const fields = {
   forwardEnabled: $("forwardEnabled") as HTMLInputElement,
   captureAll: $("captureAll") as HTMLInputElement,
   agentEnabled: $("agentEnabled") as HTMLInputElement,
+  passiveCapture: $("passiveCapture") as HTMLInputElement,
 };
 
 async function load(): Promise<void> {
@@ -26,6 +27,7 @@ async function load(): Promise<void> {
   fields.forwardEnabled.checked = s.forwardEnabled;
   fields.captureAll.checked = s.captureAll;
   fields.agentEnabled.checked = s.agentEnabled;
+  fields.passiveCapture.checked = s.passiveCapture;
   const locked = await managedKeys();
   for (const k of locked) {
     const el = (fields as Record<string, HTMLInputElement>)[k];
@@ -107,6 +109,7 @@ $("save").addEventListener("click", async () => {
     forwardEnabled: fields.forwardEnabled.checked,
     captureAll: fields.captureAll.checked,
     agentEnabled: fields.agentEnabled.checked,
+    passiveCapture: fields.passiveCapture.checked,
   };
   if (patch.forwardEnabled && patch.apiHost) await ensureApiPermission(patch.apiHost);
   await saveSettings(patch);

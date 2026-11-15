@@ -120,13 +120,32 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResp
 });
 
 // Periodic queue flush (survives SW sleep/wake).
+// Passive capture scripts are registered only when explicitly enabled (rule #1:
+// by default nothing runs in Etsy's page world).
+const PASSIVE_IDS = ["oc-interceptor", "oc-bridge"];
+async function syncPassiveScripts(): Promise<void> {
+  const { passiveCapture } = await getSettings();
+  const existing = (await chrome.scripting.getRegisteredContentScripts({ ids: PASSIVE_IDS })).map((s) => s.id);
+  if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: existing });
+  if (!passiveCapture) return;
+  await chrome.scripting.registerContentScripts([
+    { id: "oc-interceptor", matches: ["https://www.etsy.com/*"], js: ["interceptor.js"], runAt: "document_start", world: "MAIN", persistAcrossSessions: true },
+    { id: "oc-bridge", matches: ["https://www.etsy.com/*"], js: ["bridge.js", "actions.js"], runAt: "document_start", world: "ISOLATED", persistAcrossSessions: true },
+  ]);
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "managed" || (area === "local" && changes.settings)) void syncPassiveScripts();
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: FLUSH_PERIOD_MIN });
   scheduleAgent();
+  void syncPassiveScripts();
 });
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: FLUSH_PERIOD_MIN });
   scheduleAgent();
+  void syncPassiveScripts();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === POLL_ALARM) {
