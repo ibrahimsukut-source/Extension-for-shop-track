@@ -1,0 +1,1 @@
+{ "comment": "ECDSA P-256 public key (SPKI, base64) that remote runner modules must be signed with. Generate with: node api/scripts/module-keys.mjs. null = remote modules disabled.", "spki": null }

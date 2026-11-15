@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeTestPool } from "./helpers.js";
 import { buildServer } from "../src/server.js";
-import { parseTokens, type Config } from "../src/config.js";
+import { defaultAgentConfig, parseTokens, type Config } from "../src/config.js";
 
 function makeApp(over: Partial<Config> = {}) {
   const pool = makeTestPool();
@@ -16,6 +16,7 @@ function makeApp(over: Partial<Config> = {}) {
     dashboardKey: "",
     usingDefaultToken: false,
     anthropicApiKey: "",
+    agent: defaultAgentConfig(),
     ...over,
   };
   return { app: buildServer({ pool, config }), pool };

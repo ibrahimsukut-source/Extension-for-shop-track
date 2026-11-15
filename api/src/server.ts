@@ -12,9 +12,14 @@ import { getDashboardData } from "./dashboard_repo.js";
 import { buildAnalysisSummary, toMarkdown } from "./analysis/summary.js";
 import { askEnabled, askQuestion } from "./analysis/ask.js";
 import { scheduleParse } from "./parse/scheduler.js";
+import { agentHub } from "./agent/routes.js";
+import { fileModuleStore } from "./agent/modules.js";
+import { extensionDistribution } from "./agent/distribution.js";
+import { parseRuleConfig } from "./agent/rules.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DASHBOARD_HTML = readFileSync(path.resolve(here, "../public/dashboard.html"), "utf8");
+const COMMAND_HTML = readFileSync(path.resolve(here, "../public/komuta.html"), "utf8");
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -48,7 +53,7 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
   app.addHook("onRequest", async (request, reply) => {
     reply.header("access-control-allow-origin", request.headers.origin ?? "*");
     reply.header("access-control-allow-methods", "GET, POST, OPTIONS");
-    reply.header("access-control-allow-headers", "authorization, content-type");
+    reply.header("access-control-allow-headers", "authorization, content-type, x-admin-key");
     reply.header("access-control-max-age", "86400");
     if (request.method === "OPTIONS") return reply.code(204).send();
   });
@@ -102,6 +107,27 @@ export function buildServer({ pool, config }: AppDeps): FastifyInstance {
     const result = await askQuestion(pool, config.anthropicApiKey, parsed.data.question);
     return reply.send(result);
   });
+
+  // ── Command center: agents in each shop's Chrome + admin UI ───────────────
+  app.get("/komuta", async (_req, reply) => reply.type("text/html").send(COMMAND_HTML));
+  app.register(agentHub, {
+    pool,
+    tokenToShop: config.tokenToShop,
+    adminKey: config.agent.adminKey,
+    limits: {
+      maxDailyBudgetUsd: config.agent.maxDailyBudgetUsd,
+      budgetWriteEnabled: config.agent.budgetWriteEnabled,
+      maxListingsPerToggle: config.agent.maxListingsPerToggle,
+    },
+    rules: parseRuleConfig(config.agent.rulesConfig),
+    collectEveryHours: config.agent.collectEveryHours,
+    pollSeconds: config.agent.pollSeconds,
+    modules: fileModuleStore(path.resolve(config.agent.runnerPath), config.agent.moduleSigningKey),
+    onIngest: config.autoParse ? () => scheduleParse(pool) : undefined,
+  });
+  if (config.agent.publicUrl) {
+    app.register(extensionDistribution, { releaseDir: path.resolve(config.agent.releaseDir), publicUrl: config.agent.publicUrl });
+  }
 
   // Auth for every /ingest/* route: resolve token -> shop_tag (spec §9).
   app.addHook("preHandler", async (request, reply) => {

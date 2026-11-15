@@ -25,3 +25,7 @@ dist/
 # Logs
 *.log
 npm-debug.log*
+
+# agent distribution
+extension/release/
+*.pem

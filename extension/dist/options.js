@@ -8,12 +8,28 @@
     vpsHost: "",
     chromeProfile: "",
     forwardEnabled: false,
-    captureAll: false
+    captureAll: false,
+    agentEnabled: true
   };
   var KEY = "settings";
+  async function getManaged() {
+    try {
+      const m = await chrome.storage.managed.get(null);
+      const out = {};
+      for (const [k, v] of Object.entries(m ?? {})) {
+        if (v !== void 0 && v !== null && v !== "") out[k] = v;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
   async function getSettings() {
     const stored = await chrome.storage.local.get(KEY);
-    return { ...DEFAULT_SETTINGS, ...stored[KEY] };
+    return { ...DEFAULT_SETTINGS, ...stored[KEY], ...await getManaged() };
+  }
+  async function managedKeys() {
+    return Object.keys(await getManaged());
   }
   async function saveSettings(patch) {
     const next = { ...await getSettings(), ...patch };
@@ -61,7 +77,8 @@
     apiHost: $("apiHost"),
     apiToken: $("apiToken"),
     forwardEnabled: $("forwardEnabled"),
-    captureAll: $("captureAll")
+    captureAll: $("captureAll"),
+    agentEnabled: $("agentEnabled")
   };
   async function load() {
     const s = await getSettings();
@@ -72,6 +89,25 @@
     fields.apiToken.value = s.apiToken;
     fields.forwardEnabled.checked = s.forwardEnabled;
     fields.captureAll.checked = s.captureAll;
+    fields.agentEnabled.checked = s.agentEnabled;
+    const locked = await managedKeys();
+    for (const k of locked) {
+      const el = fields[k];
+      if (el) el.disabled = true;
+    }
+    $("managedHint").textContent = locked.length ? `Politika ile y\xF6netilen alanlar: ${locked.join(", ")}` : "";
+    await refreshAgent();
+  }
+  async function refreshAgent() {
+    const st = await chrome.runtime.sendMessage({ type: "AGENT_STATUS" });
+    if (!st) return;
+    $("agentStatus").textContent = [
+      `Etsy oturumu: ${st.loggedIn === true ? "a\xE7\u0131k" : st.loggedIn === false ? "KAPALI" : "bilinmiyor"}${st.shopName ? " \xB7 " + st.shopName : ""}`,
+      `\xC7al\u0131\u015Ft\u0131r\u0131c\u0131: ${st.module}${st.remoteModules ? " (uzaktan g\xFCncelleme a\xE7\u0131k)" : " (uzaktan g\xFCncelleme kapal\u0131)"}`,
+      `Son i\u015F: ${st.lastJob ? `#${st.lastJob.id} ${st.lastJob.kind} ${st.lastJob.ok ? "\u2713" : "\u2717"} ${st.lastJob.at}` : "yok"}`,
+      st.pausedUntil > Date.now() ? `Etsy engeli sonras\u0131 bekleme: ${new Date(st.pausedUntil).toLocaleTimeString()} kadar` : "",
+      st.lastError ? `Son hata: ${st.lastError}` : ""
+    ].filter(Boolean).join("\n");
   }
   var displayedRecent = [];
   async function refreshRecent() {
@@ -116,7 +152,8 @@
       apiHost: fields.apiHost.value.trim(),
       apiToken: fields.apiToken.value.trim(),
       forwardEnabled: fields.forwardEnabled.checked,
-      captureAll: fields.captureAll.checked
+      captureAll: fields.captureAll.checked,
+      agentEnabled: fields.agentEnabled.checked
     };
     if (patch.forwardEnabled && patch.apiHost) await ensureApiPermission(patch.apiHost);
     await saveSettings(patch);
@@ -125,6 +162,11 @@
     setTimeout(() => status.textContent = "", 1500);
   });
   $("refresh").addEventListener("click", () => void refreshRecent());
+  $("agentRun").addEventListener("click", async () => {
+    $("agentStatus").textContent = "\xE7al\u0131\u015F\u0131yor\u2026";
+    await chrome.runtime.sendMessage({ type: "AGENT_RUN_NOW" });
+    await refreshAgent();
+  });
   $("clear").addEventListener("click", async () => {
     await clearRecent();
     await refreshRecent();

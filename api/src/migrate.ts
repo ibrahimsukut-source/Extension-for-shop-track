@@ -6,6 +6,7 @@ import path from "node:path";
 import { loadDotEnv } from "./env.js";
 import { loadConfig } from "./config.js";
 import { createPool, isMemory } from "./db.js";
+import { AGENT_SCHEMA } from "./agent/schema.js";
 
 loadDotEnv();
 
@@ -22,6 +23,7 @@ async function main() {
   const pool = await createPool(config.databaseUrl);
   try {
     await pool.query(sql);
+    await pool.query(AGENT_SCHEMA);
     console.log(`[migrate] applied ${path.relative(process.cwd(), schemaPath)}`);
   } finally {
     await pool.end();

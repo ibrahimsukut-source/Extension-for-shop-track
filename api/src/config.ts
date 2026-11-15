@@ -17,6 +17,20 @@ export interface Config {
   usingDefaultToken: boolean;
   /** Optional: enables the dashboard's NL question box (spec §9). Empty = disabled. */
   anthropicApiKey: string;
+  /** Command center (agent hub) settings. */
+  agent: {
+    adminKey: string;
+    collectEveryHours: number;
+    pollSeconds: number;
+    maxDailyBudgetUsd: number;
+    budgetWriteEnabled: boolean;
+    maxListingsPerToggle: number;
+    rulesConfig: string;
+    moduleSigningKey: string;
+    runnerPath: string;
+    releaseDir: string;
+    publicUrl: string;
+  };
 }
 
 /** Zero-config local default so the extension can forward without an .env.
@@ -53,6 +67,22 @@ export function parseTokens(raw: string | undefined): Map<string, string> {
   return map;
 }
 
+export function defaultAgentConfig(): Config["agent"] {
+  return {
+    adminKey: "",
+    collectEveryHours: 6,
+    pollSeconds: 60,
+    maxDailyBudgetUsd: 100,
+    budgetWriteEnabled: false,
+    maxListingsPerToggle: 200,
+    rulesConfig: "",
+    moduleSigningKey: "",
+    runnerPath: "../extension/dist/page-runner.js",
+    releaseDir: "../extension/release",
+    publicUrl: "",
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // Empty DATABASE_URL selects the zero-install in-memory database (pg-mem),
   // so `npm run dev` works with no Docker/Postgres. Set a postgres:// URL for
@@ -76,5 +106,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dashboardKey: env.DASHBOARD_KEY ?? "",
     usingDefaultToken,
     anthropicApiKey: (env.ANTHROPIC_API_KEY ?? "").trim(),
+    agent: {
+      // Falls back to DASHBOARD_KEY so one secret can guard both.
+      adminKey: (env.ADMIN_KEY ?? env.DASHBOARD_KEY ?? "").trim(),
+      collectEveryHours: Number(env.COLLECT_EVERY_HOURS ?? 6),
+      pollSeconds: Number(env.AGENT_POLL_SECONDS ?? 60),
+      maxDailyBudgetUsd: Number(env.MAX_DAILY_BUDGET_USD ?? 100),
+      budgetWriteEnabled: /^(1|true|yes|on)$/i.test(env.BUDGET_WRITE_ENABLED ?? ""),
+      maxListingsPerToggle: Number(env.MAX_LISTINGS_PER_TOGGLE ?? 200),
+      rulesConfig: env.RULES_CONFIG ?? "",
+      moduleSigningKey: env.MODULE_SIGNING_KEY ?? "",
+      runnerPath: env.RUNNER_PATH ?? "../extension/dist/page-runner.js",
+      releaseDir: env.EXT_RELEASE_DIR ?? "../extension/release",
+      publicUrl: env.PUBLIC_URL ?? "",
+    },
   };
 }

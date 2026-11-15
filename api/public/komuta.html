@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Etsy Komuta Merkezi</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc;
+    --accent: #c4501b; --accent-ink: #ffffff; --good: #2f7d4f; --bad: #b3261e; --warn: #9a6700;
+    --chip: #efeee9; --row-hover: #faf9f6;
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151514; --panel: #1e1e1c; --ink: #ecebe6; --muted: #a09e97; --line: #33322f;
+      --accent: #e0703a; --chip: #2a2a27; --row-hover: #252523; --good: #6cc191; --bad: #f08a80; --warn: #e3b341;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151514; --panel: #1e1e1c; --ink: #ecebe6; --muted: #a09e97; --line: #33322f;
+    --accent: #e0703a; --chip: #2a2a27; --row-hover: #252523; --good: #6cc191; --bad: #f08a80; --warn: #e3b341;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font); }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  header .sp { flex: 1; }
+  main { max-width: 1280px; margin: 0 auto; padding: 18px 16px 60px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input, select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .muted { color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card h3 { margin: 0 0 2px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.on { background: var(--good); } .dot.off { background: var(--bad); } .dot.warn { background: var(--warn); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+  .kpi .v { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 1px 8px; font-size: 12px; }
+  .chip.bad { color: var(--bad); } .chip.good { color: var(--good); } .chip.warn { color: var(--warn); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 16px 0 12px; overflow-x: auto; }
+  .tabs button { white-space: nowrap; border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 12px; color: var(--muted); }
+  .tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); cursor: pointer; }
+  td.num, th.num { text-align: right; }
+  tr:hover td { background: var(--row-hover); }
+  td.title { white-space: normal; min-width: 260px; max-width: 420px; }
+  .thumb { width: 38px; height: 30px; object-fit: cover; border-radius: 4px; vertical-align: middle; margin-right: 8px; background: var(--chip); }
+  .bar { position: sticky; bottom: 12px; margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.12); }
+  .bar.show { display: flex; }
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100% - 32px); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  .toast { position: fixed; right: 16px; bottom: 16px; background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 420px; }
+  .toast.show { opacity: 1; }
+  .empty { padding: 28px; text-align: center; color: var(--muted); }
+  .sugg { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .sugg:last-child { border-bottom: none; }
+  #login { max-width: 360px; margin: 80px auto; }
+  .kpis.wide { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, 1fr); } .kpis.wide { grid-template-columns: repeat(3, 1fr); } header { padding: 12px 16px; flex-wrap: wrap; } #updated { display: none; } header h1 { font-size: 15px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Etsy Komuta Merkezi</h1>
+  <span class="muted" id="crumb"></span>
+  <span class="sp"></span>
+  <span class="muted" id="updated"></span>
+  <button id="refresh">Yenile</button>
+</header>
+<main>
+  <section id="login" class="card" hidden>
+    <h3>Giriş</h3>
+    <p class="muted">Yönetici anahtarını gir (sunucudaki ADMIN_KEY).</p>
+    <div class="row"><input id="key" type="password" placeholder="Yönetici anahtarı" style="flex:1" /><button class="primary" id="saveKey">Gir</button></div>
+  </section>
+  <section id="overview" hidden></section>
+  <section id="shop" hidden></section>
+</main>
+
+<dialog id="confirm">
+  <h3 id="cTitle" style="margin-top:0"></h3>
+  <div id="cBody" class="muted"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:16px">
+    <button id="cNo">Vazgeç</button><button class="primary" id="cYes">Talimatı gönder</button>
+  </div>
+</dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = (c) => (c == null ? "–" : "$" + (Number(c) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const n = (v) => (v == null ? "–" : Number(v).toLocaleString("tr-TR"));
+const ago = (t) => { if (!t) return "hiç"; const s = (Date.now() - Date.parse(t)) / 1000; if (s < 90) return "az önce"; if (s < 3600) return Math.round(s / 60) + " dk önce"; if (s < 86400) return Math.round(s / 3600) + " sa önce"; return Math.round(s / 86400) + " gün önce"; };
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+let KEY = store.get("komutaKey") || "";
+let state = { view: "overview", shop: null, tab: "ads", overview: null, ads: null, sel: new Set(), sort: { k: "spend_cents", d: -1 }, filter: "all", q: "" };
+
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3500); }
+
+async function api(path, opts = {}) {
+  const headers = { "x-admin-key": KEY, ...(opts.body ? { "content-type": "application/json" } : {}), ...(opts.headers || {}) };
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 401) { showLogin(); throw new Error("Yetkisiz"); }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "HTTP " + res.status);
+  return body;
+}
+function confirmBox(title, html) {
+  return new Promise((resolve) => {
+    $("#cTitle").textContent = title; $("#cBody").innerHTML = html;
+    const d = $("#confirm"); d.showModal();
+    $("#cYes").onclick = () => { d.close(); resolve(true); };
+    $("#cNo").onclick = () => { d.close(); resolve(false); };
+  });
+}
+async function sendJob(shopTag, kind, params, title, html) {
+  if (kind.startsWith("ads.") && !(await confirmBox(title, html))) return;
+  try {
+    const r = await api("/admin/v1/jobs", { method: "POST", body: JSON.stringify({ shopTag, kind, params }) });
+    toast(`Talimat sıraya alındı (#${r.job.id}). Ajan bir dakika içinde uygulayacak.`);
+    if (state.view === "shop") loadShop();
+  } catch (e) { toast("Gönderilemedi: " + e.message); }
+}
+
+function showLogin() { $("#login").hidden = false; $("#overview").hidden = true; $("#shop").hidden = true; }
+$("#saveKey").onclick = () => { KEY = $("#key").value.trim(); store.set("komutaKey", KEY); $("#login").hidden = true; route(); };
+$("#refresh").onclick = () => route();
+
+function agentStatus(a) {
+  if (!a || !a.last_seen) return { cls: "", text: "Bağlanmadı" };
+  const fresh = Date.now() - Date.parse(a.last_seen) < 3 * 60 * 1000;
+  if (a.paused) return { cls: "warn", text: "Duraklatıldı" };
+  if (!fresh) return { cls: "off", text: "Çevrimdışı · " + ago(a.last_seen) };
+  if (a.logged_in === false) return { cls: "off", text: "Etsy oturumu kapalı" };
+  return { cls: "on", text: "Çevrimiçi" };
+}
+
+async function loadOverview() {
+  const ov = await api("/admin/v1/overview");
+  state.overview = ov;
+  $("#crumb").textContent = ""; $("#updated").textContent = "Güncellendi " + new Date().toLocaleTimeString("tr-TR");
+  const el = $("#overview"); el.hidden = false; $("#shop").hidden = true;
+  if (!ov.shops.length) { el.innerHTML = '<div class="card empty">Henüz mağaza yok. Sunucudaki INGEST_TOKENS listesine mağaza ekle.</div>'; return; }
+  el.innerHTML = '<div class="grid">' + ov.shops.map((s) => {
+    const st = agentStatus(s.agent); const c = s.campaign; const t = c?.totals || {};
+    const roas = t.spentTotal ? (t.revenue / t.spentTotal).toFixed(2) : "–";
+    const err = s.agent?.last_error ? `<div class="chip bad" title="${esc(s.agent.last_error)}" style="margin-top:6px;max-width:100%;overflow:hidden;text-overflow:ellipsis">${esc(s.agent.last_error.slice(0, 80))}</div>` : "";
+    return `<div class="card">
+      <h3><span class="dot ${st.cls}"></span>${esc(s.agent?.shop_name || s.shopTag)}</h3>
+      <div class="muted" style="font-size:12px">${esc(s.shopTag)} · ${st.text}${c ? " · veri " + ago(c.captured_at) : ""}</div>
+      <div class="kpis">
+        <div class="kpi"><div class="v">${c ? usd(c.budget_cents) : "–"}</div><div class="l">Günlük bütçe</div></div>
+        <div class="kpi"><div class="v">${usd(t.spentTotal)}</div><div class="l">Harcama 30g</div></div>
+        <div class="kpi"><div class="v">${usd(t.revenue)}</div><div class="l">Reklam geliri</div></div>
+        <div class="kpi"><div class="v">${roas}</div><div class="l">ROAS</div></div>
+      </div>
+      <div class="row muted" style="font-size:12px">
+        ${s.stats30 ? `Ziyaret ${n(s.stats30.visits)} · Sipariş ${n(s.stats30.orders)} · Dönüşüm ${esc(s.stats30.conversion_rate ?? "–")}` : "Mağaza istatistiği yok"}
+      </div>${err}
+      <div class="row" style="margin-top:10px">
+        <button class="primary" data-open="${esc(s.shopTag)}">Aç</button>
+        ${s.openSuggestions ? `<span class="chip warn">${s.openSuggestions} öneri</span>` : ""}
+        ${s.queued ? `<span class="chip">${s.queued} iş sırada</span>` : ""}
+        <span class="sp" style="flex:1"></span>
+        <button data-collect="${esc(s.shopTag)}" title="Ads + Stats verisini şimdi topla">Topla</button>
+      </div>
+    </div>`;
+  }).join("") + "</div>";
+  el.querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => { location.hash = "#/shop/" + encodeURIComponent(b.dataset.open); }));
+  el.querySelectorAll("[data-collect]").forEach((b) => (b.onclick = async () => {
+    await sendJob(b.dataset.collect, "collect.ads", {}); await sendJob(b.dataset.collect, "collect.shop_stats", {}); loadOverview();
+  }));
+}
+
+async function loadShop() {
+  const tag = state.shop;
+  const [ads, sugg, jobs, acts, stats] = await Promise.all([
+    api(`/admin/v1/shops/${encodeURIComponent(tag)}/ads`),
+    api(`/admin/v1/suggestions?shop_tag=${encodeURIComponent(tag)}`),
+    api(`/admin/v1/jobs?shop_tag=${encodeURIComponent(tag)}&limit=40`),
+    api(`/admin/v1/actions?shop_tag=${encodeURIComponent(tag)}`),
+    api(`/admin/v1/shops/${encodeURIComponent(tag)}/stats`),
+  ]);
+  if (!state.overview) state.overview = await api("/admin/v1/overview");
+  state.ads = ads; state.sugg = sugg.suggestions; state.jobs = jobs.jobs; state.acts = acts.actions; state.stats = stats.stats;
+  renderShop();
+}
+
+function renderShop() {
+  const tag = state.shop; const s = state.overview.shops.find((x) => x.shopTag === tag) || { shopTag: tag };
+  const st = agentStatus(s.agent);
+  $("#crumb").innerHTML = `<a href="#/" style="color:inherit">Mağazalar</a> / ${esc(s.agent?.shop_name || tag)}`;
+  $("#updated").textContent = "Güncellendi " + new Date().toLocaleTimeString("tr-TR");
+  $("#overview").hidden = true; const el = $("#shop"); el.hidden = false;
+  const c = state.ads.campaign; const t = c?.totals || {};
+  const tabs = [["ads", "Reklamlar"], ["kw", "Anahtar kelimeler"], ["sugg", `Öneriler${state.sugg.length ? " (" + state.sugg.length + ")" : ""}`], ["budget", "Bütçe"], ["stats", "Mağaza istatistikleri"], ["log", "İşler ve kayıt"]];
+  el.innerHTML = `
+    <div class="card">
+      <div class="row"><span class="dot ${st.cls}"></span><strong>${esc(s.agent?.shop_name || tag)}</strong>
+        <span class="muted">${st.text} · eklenti ${esc(s.agent?.ext_version || "–")} · modül ${esc(s.agent?.module_version || "–")}</span>
+        <span style="flex:1"></span>
+        <button id="collectNow">Şimdi topla</button>
+        <button id="pauseBtn">${s.agent?.paused ? "Devam ettir" : "Duraklat"}</button></div>
+      <div class="kpis wide">
+        <div class="kpi"><div class="v">${c ? usd(c.budget_cents) : "–"}</div><div class="l">Günlük bütçe</div></div>
+        <div class="kpi"><div class="v">${n(t.impressionCount)}</div><div class="l">Gösterim</div></div>
+        <div class="kpi"><div class="v">${n(t.clickCount)}</div><div class="l">Tık</div></div>
+        <div class="kpi"><div class="v">${usd(t.spentTotal)}</div><div class="l">Harcama</div></div>
+        <div class="kpi"><div class="v">${usd(t.revenue)}</div><div class="l">Gelir (${n(t.conversions)} sip.)</div></div>
+        <div class="kpi"><div class="v">${t.spentTotal ? (t.revenue / t.spentTotal).toFixed(2) : "–"}</div><div class="l">ROAS</div></div>
+      </div>
+      <div class="muted" style="font-size:12px">${c ? `Aralık ${String(c.range_start).slice(0, 10)} – ${String(c.range_end).slice(0, 10)} · ${n(c.promoted_count)} listing reklamda · veri ${ago(c.captured_at)}` : "Henüz reklam verisi toplanmadı — “Şimdi topla”ya bas."}</div>
+    </div>
+    <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${state.tab === k ? "active" : ""}">${l}</button>`).join("")}</div>
+    <div id="tabBody"></div>`;
+  el.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; renderShop(); }));
+  $("#collectNow").onclick = async () => { await sendJob(tag, "collect.ads", {}); await sendJob(tag, "collect.shop_stats", {}); };
+  $("#pauseBtn").onclick = async () => { await api(`/admin/v1/agents/${encodeURIComponent(tag)}/pause`, { method: "POST", body: JSON.stringify({ paused: !s.agent?.paused }) }); state.overview = null; await loadShop(); };
+  ({ ads: renderAds, kw: renderKw, sugg: renderSugg, budget: renderBudget, stats: renderStats, log: renderLog })[state.tab]();
+}
+
+function renderAds() {
+  const body = $("#tabBody"); const tag = state.shop;
+  let rows = state.ads.listings.slice();
+  if (state.filter === "on") rows = rows.filter((r) => r.is_promoted);
+  if (state.filter === "off") rows = rows.filter((r) => r.is_promoted === false);
+  if (state.filter === "nosale") rows = rows.filter((r) => r.is_promoted && Number(r.orders || 0) === 0 && Number(r.spend_cents || 0) > 0);
+  if (state.q) rows = rows.filter((r) => (r.title || "").toLowerCase().includes(state.q) || String(r.listing_id).includes(state.q));
+  const k = state.sort.k, d = state.sort.d;
+  rows.sort((a, b) => ((Number(a[k] ?? -1) - Number(b[k] ?? -1)) || 0) * d);
+  const cols = [["impressions", "Gösterim"], ["clicks", "Tık"], ["click_rate", "Tık %"], ["spend_cents", "Harcama"], ["orders", "Sipariş"], ["revenue_cents", "Gelir"], ["roas", "ROAS"]];
+  body.innerHTML = `
+    <div class="row" style="margin-bottom:10px">
+      <input id="q" placeholder="Ara: başlık veya listing no" value="${esc(state.q)}" style="flex:1;min-width:200px" />
+      <select id="flt">
+        <option value="all">Tümü (${state.ads.listings.length})</option><option value="on">Reklamda</option><option value="off">Reklamda değil</option><option value="nosale">Harcıyor, satış yok</option>
+      </select>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th><input type="checkbox" id="all" /></th><th>Ürün</th><th>Reklam</th>
+      ${cols.map(([c, l]) => `<th class="num" data-sort="${c}">${l}${k === c ? (d < 0 ? " ↓" : " ↑") : ""}</th>`).join("")}<th class="num">Kelime</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td><input type="checkbox" data-id="${r.listing_id}" ${state.sel.has(String(r.listing_id)) ? "checked" : ""} /></td>
+        <td class="title">${r.image_url ? `<img class="thumb" src="${esc(r.image_url)}" alt="" loading="lazy" />` : ""}${esc(r.title)}<div class="muted" style="font-size:11px">#${r.listing_id}${r.section ? " · " + esc(r.section) : ""}</div></td>
+        <td>${r.is_promoted ? '<span class="chip good">Açık</span>' : '<span class="chip">Kapalı</span>'}</td>
+        <td class="num">${n(r.impressions)}</td><td class="num">${n(r.clicks)}</td><td class="num">${r.click_rate == null ? "–" : Number(r.click_rate).toFixed(1)}</td>
+        <td class="num">${usd(r.spend_cents)}</td><td class="num">${n(r.orders)}</td><td class="num">${usd(r.revenue_cents)}</td>
+        <td class="num">${r.roas == null ? "–" : `<span class="${Number(r.roas) < 1 && Number(r.spend_cents) > 0 ? "chip bad" : ""}">${Number(r.roas).toFixed(2)}</span>`}</td>
+        <td class="num">${state.ads.queryCounts[String(r.listing_id)] ? `<button data-kw="${r.listing_id}">${state.ads.queryCounts[String(r.listing_id)]}</button>` : "–"}</td>
+      </tr>`).join("") || `<tr><td colspan="11" class="empty">Kayıt yok</td></tr>`}</tbody>
+    </table></div>
+    <div class="bar ${state.sel.size ? "show" : ""} row" id="selbar"><strong>${state.sel.size} listing seçili</strong><span style="flex:1"></span>
+      <button id="clr">Seçimi temizle</button><button id="adOn">Reklamı aç</button><button class="primary" id="adOff">Reklamı kapat</button></div>`;
+  $("#flt").value = state.filter;
+  $("#flt").onchange = (e) => { state.filter = e.target.value; renderAds(); };
+  $("#q").oninput = (e) => { state.q = e.target.value.toLowerCase(); clearTimeout(renderAds._t); renderAds._t = setTimeout(() => { renderAds(); const i = $("#q"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+  body.querySelectorAll("[data-sort]").forEach((th) => (th.onclick = () => { state.sort = { k: th.dataset.sort, d: state.sort.k === th.dataset.sort ? -state.sort.d : -1 }; renderAds(); }));
+  body.querySelectorAll("[data-id]").forEach((cb) => (cb.onchange = () => { cb.checked ? state.sel.add(cb.dataset.id) : state.sel.delete(cb.dataset.id); renderAds(); }));
+  $("#all").onchange = (e) => { rows.forEach((r) => (e.target.checked ? state.sel.add(String(r.listing_id)) : state.sel.delete(String(r.listing_id)))); renderAds(); };
+  body.querySelectorAll("[data-kw]").forEach((b) => (b.onclick = () => { state.kwListing = b.dataset.kw; state.tab = "kw"; renderShop(); }));
+  $("#clr").onclick = () => { state.sel.clear(); renderAds(); };
+  const toggle = async (promoted) => {
+    const ids = [...state.sel].map(Number);
+    const names = state.ads.listings.filter((l) => state.sel.has(String(l.listing_id))).slice(0, 8).map((l) => `<li>${esc(l.title)}</li>`).join("");
+    await sendJob(tag, "ads.set_promoted", { listingIds: ids, promoted }, `${ids.length} listingin reklamı ${promoted ? "açılacak" : "kapatılacak"}`,
+      `<ul style="padding-left:18px">${names}${ids.length > 8 ? `<li>… ve ${ids.length - 8} tane daha</li>` : ""}</ul>Ajan değişikliği uygulayıp Etsy'den tekrar okuyarak doğrulayacak.`);
+    state.sel.clear();
+  };
+  $("#adOn").onclick = () => toggle(true);
+  $("#adOff").onclick = () => toggle(false);
+}
+
+async function renderKw() {
+  const body = $("#tabBody"); const tag = state.shop;
+  const withQ = state.ads.listings.filter((l) => state.ads.queryCounts[String(l.listing_id)]);
+  if (!withQ.length) { body.innerHTML = '<div class="card empty">Anahtar kelime verisi yok. Toplama, en çok harcayan listinglerin arama terimlerini getirir.</div>'; return; }
+  if (!state.kwListing || !withQ.some((l) => String(l.listing_id) === String(state.kwListing))) state.kwListing = String(withQ[0].listing_id);
+  const { queries } = await api(`/admin/v1/shops/${encodeURIComponent(tag)}/queries?listing_id=${state.kwListing}`);
+  const cur = withQ.find((l) => String(l.listing_id) === String(state.kwListing));
+  body.innerHTML = `
+    <div class="row" style="margin-bottom:10px"><select id="kwSel" style="flex:1;max-width:100%">${withQ.map((l) => `<option value="${l.listing_id}">${esc((l.title || "").slice(0, 90))} — ${usd(l.spend_cents)}</option>`).join("")}</select></div>
+    <p class="muted" style="margin:0 0 10px">Etsy'nin bu ürünün reklamını gösterdiği aramalar (son 30 gün). “Kapat” = Etsy'ye bu aramanın alakasız olduğunu bildirir, reklam artık bu aramada gösterilmez.</p>
+    <div class="tablewrap"><table><thead><tr><th>Arama</th><th class="num">Gösterim</th><th class="num">Tık</th><th class="num">Tık %</th><th class="num">Harcama</th><th class="num">Sipariş</th><th class="num">Gelir</th><th class="num">ROAS</th><th>Durum</th></tr></thead>
+    <tbody>${queries.map((q) => `<tr><td>${esc(q.query)}</td><td class="num">${n(q.impressions)}</td><td class="num">${n(q.clicks)}</td><td class="num">${q.click_rate == null ? "–" : Number(q.click_rate).toFixed(1)}</td>
+      <td class="num">${usd(q.cost_cents)}</td><td class="num">${n(q.orders)}</td><td class="num">${usd(q.revenue_cents)}</td><td class="num">${q.roas == null ? "–" : Number(q.roas).toFixed(2)}</td>
+      <td>${q.is_relevant === false ? `<button data-q="${esc(q.query)}" data-rel="1">Tekrar aç</button>` : `<button class="danger" data-q="${esc(q.query)}" data-rel="0">Kapat</button>`}</td></tr>`).join("")}</tbody></table></div>`;
+  $("#kwSel").value = state.kwListing;
+  $("#kwSel").onchange = (e) => { state.kwListing = e.target.value; renderKw(); };
+  body.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => {
+    const rel = b.dataset.rel === "1";
+    sendJob(tag, "ads.set_query_relevance", { items: [{ listingId: Number(state.kwListing), query: b.dataset.q, isRelevant: rel }] },
+      `“${b.dataset.q}” araması ${rel ? "tekrar açılacak" : "kapatılacak"}`, `Ürün: ${esc(cur?.title)}`);
+  }));
+}
+
+function renderSugg() {
+  const body = $("#tabBody");
+  if (!state.sugg.length) { body.innerHTML = '<div class="card empty">Açık öneri yok. Öneriler her reklam toplamasından sonra yeniden hesaplanır.</div>'; return; }
+  body.innerHTML = '<div class="card" style="padding:0">' + state.sugg.map((s) => `<div class="sugg">
+      <div><strong>${esc(s.reason)}</strong><div class="muted" style="font-size:12px">${esc(s.evidence?.title || s.evidence?.query || "")} ${s.evidence?.range ? "· " + esc(s.evidence.range) : ""} · ${esc(s.rule)}</div></div>
+      <div class="row"><button data-dis="${s.id}">Yoksay</button><button class="primary" data-acc="${s.id}">Uygula</button></div></div>`).join("") + "</div>";
+  body.querySelectorAll("[data-acc]").forEach((b) => (b.onclick = async () => {
+    const s = state.sugg.find((x) => String(x.id) === b.dataset.acc);
+    if (!(await confirmBox("Öneri uygulansın mı?", esc(s.reason)))) return;
+    try { await api(`/admin/v1/suggestions/${s.id}/accept`, { method: "POST" }); toast("Talimat sıraya alındı."); loadShop(); } catch (e) { toast(e.message); }
+  }));
+  body.querySelectorAll("[data-dis]").forEach((b) => (b.onclick = async () => { await api(`/admin/v1/suggestions/${b.dataset.dis}/dismiss`, { method: "POST" }); loadShop(); }));
+}
+
+function renderBudget() {
+  const body = $("#tabBody"); const c = state.ads.campaign; const lim = state.overview.limits;
+  const daily = (c?.daily || []).slice(-14);
+  const max = Math.max(1, ...daily.map((d) => d.spendCents || 0), c?.budget_cents || 0);
+  body.innerHTML = `<div class="card">
+    <div class="row"><div><div class="muted">Şu anki günlük bütçe</div><div style="font-size:24px;font-weight:650">${c ? usd(c.budget_cents) : "–"}</div></div><span style="flex:1"></span>
+      <input id="bud" type="number" min="1" step="1" max="${lim.maxDailyBudgetUsd}" placeholder="Yeni bütçe $" style="width:140px" />
+      <button class="primary" id="budGo" ${lim.budgetWriteEnabled ? "" : "disabled"}>Bütçeyi değiştir</button></div>
+    ${lim.budgetWriteEnabled ? `<p class="muted">Üst sınır: $${lim.maxDailyBudgetUsd}/gün (MAX_DAILY_BUDGET_USD).</p>` : `<p class="chip warn" style="display:inline-block;margin-top:10px">Bütçe değişikliği kapalı: Etsy'nin bütçe isteğinin biçimi canlı doğrulanana kadar (BUDGET_WRITE_ENABLED).</p>`}
+    <h4 style="margin:16px 0 6px">Son 14 gün harcama / bütçe</h4>
+    <div style="display:flex;align-items:flex-end;gap:4px;height:120px;border-bottom:1px solid var(--line)">
+      ${daily.map((d) => `<div title="${d.date}: ${usd(d.spendCents)} · ${d.orders ?? 0} sipariş" style="flex:1;background:var(--accent);opacity:.8;border-radius:3px 3px 0 0;height:${Math.max(2, ((d.spendCents || 0) / max) * 100)}%"></div>`).join("")}
+    </div>
+    <div class="muted" style="font-size:11px;display:flex;justify-content:space-between"><span>${daily[0]?.date || ""}</span><span>${daily.at(-1)?.date || ""}</span></div>
+  </div>`;
+  const go = $("#budGo");
+  if (go) go.onclick = () => {
+    const v = Number($("#bud").value);
+    if (!v || v <= 0) return toast("Geçerli bir tutar gir.");
+    sendJob(state.shop, "ads.set_budget", { dailyBudgetUsd: v }, `Günlük bütçe ${usd(c?.budget_cents)} → $${v}`, "Ajan değiştirip Etsy'den tekrar okuyarak doğrulayacak.");
+  };
+}
+
+function renderStats() {
+  const body = $("#tabBody");
+  if (!state.stats.length) { body.innerHTML = '<div class="card empty">Mağaza istatistiği henüz toplanmadı.</div>'; return; }
+  body.innerHTML = state.stats.map((s) => `<div class="card" style="margin-bottom:12px">
+    <div class="row"><strong>${esc(s.range_key)}</strong><span class="muted">${esc(s.start_date || "")} – ${esc(s.end_date || "")} · ${ago(s.captured_at)}</span></div>
+    <div class="kpis wide">
+      <div class="kpi"><div class="v">${n(s.visits)}</div><div class="l">Ziyaret</div></div><div class="kpi"><div class="v">${n(s.orders)}</div><div class="l">Sipariş</div></div>
+      <div class="kpi"><div class="v">${esc(s.revenue ?? "–")}</div><div class="l">Gelir</div></div><div class="kpi"><div class="v">${esc(s.conversion_rate ?? "–")}</div><div class="l">Dönüşüm</div></div>
+      <div class="kpi"><div class="v">${esc(s.aov ?? "–")}</div><div class="l">Ort. sepet</div></div></div>
+    ${s.traffic?.sources ? `<div class="tablewrap"><table><thead><tr><th>Trafik kaynağı</th><th class="num">Ziyaret</th><th>Geçen yıla göre</th></tr></thead><tbody>${s.traffic.sources.map((t) => `<tr><td>${esc(t.name)}</td><td class="num">${n(t.visits)}</td><td>${esc(t.yoy || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+  </div>`).join("");
+}
+
+function renderLog() {
+  const body = $("#tabBody");
+  const label = { queued: "Sırada", leased: "Çalışıyor", done: "Tamam", failed: "Hata", cancelled: "İptal" };
+  body.innerHTML = `<h4 style="margin:0 0 8px">İşler</h4><div class="tablewrap"><table><thead><tr><th>#</th><th>İş</th><th>Durum</th><th>Kaynak</th><th>Oluşturuldu</th><th>Bitti</th><th>Not</th><th></th></tr></thead><tbody>
+    ${state.jobs.map((j) => `<tr><td>${j.id}</td><td>${esc(j.kind)}</td><td><span class="chip ${j.status === "failed" ? "bad" : j.status === "done" ? "good" : ""}">${label[j.status] || j.status}</span></td><td>${esc(j.origin)}</td>
+      <td>${ago(j.created_at)}</td><td>${j.finished_at ? ago(j.finished_at) : "–"}</td><td class="title muted">${esc(j.error || (j.result?.summary ? JSON.stringify(j.result.summary) : ""))}</td>
+      <td>${j.status === "queued" ? `<button data-cancel="${j.id}">İptal</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    <h4 style="margin:18px 0 8px">Yapılan değişiklikler</h4><div class="tablewrap"><table><thead><tr><th>Zaman</th><th>İşlem</th><th>Hedef</th><th>Önce</th><th>Sonra</th><th>Doğrulandı</th></tr></thead><tbody>
+    ${state.acts.map((a) => `<tr><td>${new Date(a.created_at).toLocaleString("tr-TR")}</td><td>${esc(a.action)}</td><td>${esc(a.target)}</td><td>${esc(JSON.stringify(a.before_state))}</td><td>${esc(JSON.stringify(a.after_state))}</td>
+      <td>${a.verified ? '<span class="chip good">Evet</span>' : '<span class="chip bad">Hayır</span>'}</td></tr>`).join("") || '<tr><td colspan="6" class="empty">Henüz değişiklik yok</td></tr>'}</tbody></table></div>`;
+  body.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = async () => { await api(`/admin/v1/jobs/${b.dataset.cancel}/cancel`, { method: "POST" }); loadShop(); }));
+}
+
+async function route() {
+  const m = /^#\/shop\/(.+)$/.exec(location.hash);
+  try {
+    if (m) { state.view = "shop"; if (state.shop !== decodeURIComponent(m[1])) { state.sel.clear(); state.tab = "ads"; } state.shop = decodeURIComponent(m[1]); await loadShop(); }
+    else { state.view = "overview"; await loadOverview(); }
+  } catch (e) { if (e.message !== "Yetkisiz") toast(e.message); }
+}
+window.addEventListener("hashchange", route);
+setInterval(() => { if (!document.hidden && !$("#confirm").open && !state.sel.size) route(); }, 60000);
+route();
+</script>
+</body>
+</html>

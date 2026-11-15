@@ -1,11 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "Etsy Shop Tracker",
-  "version": "1.0.0",
-  "description": "Captures Etsy internal JSON API responses (stats, messages, ads, listings, orders) for centralized multi-shop analytics.",
-  "permissions": ["storage", "alarms"],
-  "host_permissions": ["https://www.etsy.com/*"],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "name": "Etsy Shop Agent",
+  "version": "2.0.0",
+  "description": "Etsy mağaza ajanı: Etsy Ads ve Stats verisini komuta merkezine raporlar, onaylanan reklam talimatlarını uygular.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "scripting",
+    "userScripts"
+  ],
+  "host_permissions": [
+    "https://www.etsy.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -16,16 +28,29 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.etsy.com/*"],
-      "js": ["interceptor.js"],
+      "matches": [
+        "https://www.etsy.com/*"
+      ],
+      "js": [
+        "interceptor.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["https://www.etsy.com/*"],
-      "js": ["bridge.js", "actions.js"],
+      "matches": [
+        "https://www.etsy.com/*"
+      ],
+      "js": [
+        "bridge.js",
+        "actions.js"
+      ],
       "run_at": "document_start",
       "world": "ISOLATED"
     }
-  ]
+  ],
+  "minimum_chrome_version": "120",
+  "storage": {
+    "managed_schema": "managed_schema.json"
+  }
 }

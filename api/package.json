@@ -10,7 +10,8 @@
     "migrate": "tsx src/migrate.ts",
     "parse": "tsx src/parse.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"test/*.test.ts\""
+    "test": "node --import tsx --test \"test/*.test.ts\"",
+    "module-keys": "node scripts/module-keys.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

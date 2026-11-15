@@ -48,6 +48,17 @@
     </fieldset>
 
     <fieldset>
+      <legend>Komuta merkezi ajanı</legend>
+      <div class="row">
+        <input id="agentEnabled" type="checkbox" />
+        <label for="agentEnabled" style="margin: 0; font-weight: 400">Merkezden iş al ve uygula (API host + token gerekli)</label>
+      </div>
+      <pre id="agentStatus" style="font-size:12px;white-space:pre-wrap;background:rgba(127,127,127,.12);padding:8px;border-radius:6px">…</pre>
+      <button id="agentRun">Şimdi kontrol et</button>
+      <p class="hint" id="managedHint"></p>
+    </fieldset>
+
+    <fieldset>
       <legend>Discovery mode (find real Etsy endpoints)</legend>
       <div class="row">
         <input id="captureAll" type="checkbox" />

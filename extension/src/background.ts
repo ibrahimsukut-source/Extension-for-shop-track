@@ -11,6 +11,7 @@ import { resolveShopId } from "./lib/shop.js";
 import { pushAll, pushRecent } from "./lib/store.js";
 import { enqueue, flush, queueSize } from "./lib/queue.js";
 import { canForward, getSettings } from "./lib/settings.js";
+import { agentStatus, agentTick, POLL_ALARM, scheduleAgent } from "./agent/agent.js";
 import type {
   CapturePayload,
   ClassifiedRecord,
@@ -102,6 +103,14 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResp
     void handleCapture(message.data as CapturePayload).finally(() => sendResponse({ ok: true }));
     return true; // async response
   }
+  if ((message as { type?: string })?.type === "AGENT_STATUS") {
+    void agentStatus().then(sendResponse);
+    return true;
+  }
+  if ((message as { type?: string })?.type === "AGENT_RUN_NOW") {
+    void agentTick().finally(() => sendResponse({ ok: true }));
+    return true;
+  }
   if (message?.type === "DOM_ACTION") {
     handleDomAction(message.data as DomActionPayload);
     sendResponse({ ok: true });
@@ -113,11 +122,17 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResp
 // Periodic queue flush (survives SW sleep/wake).
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: FLUSH_PERIOD_MIN });
+  scheduleAgent();
 });
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: FLUSH_PERIOD_MIN });
+  scheduleAgent();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === POLL_ALARM) {
+    void agentTick();
+    return;
+  }
   if (alarm.name !== FLUSH_ALARM) return;
   void (async () => {
     if ((await queueSize()) > 0) await flush();

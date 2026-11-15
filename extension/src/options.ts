@@ -1,5 +1,5 @@
 // Options page logic: edit per-VPS settings and inspect recent local captures.
-import { getSettings, saveSettings, type Settings } from "./lib/settings.js";
+import { getSettings, managedKeys, saveSettings, type Settings } from "./lib/settings.js";
 import { clearAll, clearRecent, getAll, getRecent } from "./lib/store.js";
 import { queueSize } from "./lib/queue.js";
 
@@ -13,6 +13,7 @@ const fields = {
   apiToken: $("apiToken") as HTMLInputElement,
   forwardEnabled: $("forwardEnabled") as HTMLInputElement,
   captureAll: $("captureAll") as HTMLInputElement,
+  agentEnabled: $("agentEnabled") as HTMLInputElement,
 };
 
 async function load(): Promise<void> {
@@ -24,6 +25,28 @@ async function load(): Promise<void> {
   fields.apiToken.value = s.apiToken;
   fields.forwardEnabled.checked = s.forwardEnabled;
   fields.captureAll.checked = s.captureAll;
+  fields.agentEnabled.checked = s.agentEnabled;
+  const locked = await managedKeys();
+  for (const k of locked) {
+    const el = (fields as Record<string, HTMLInputElement>)[k];
+    if (el) el.disabled = true;
+  }
+  $("managedHint").textContent = locked.length ? `Politika ile yönetilen alanlar: ${locked.join(", ")}` : "";
+  await refreshAgent();
+}
+
+async function refreshAgent(): Promise<void> {
+  const st = (await chrome.runtime.sendMessage({ type: "AGENT_STATUS" })) as Record<string, any> | undefined;
+  if (!st) return;
+  $("agentStatus").textContent = [
+    `Etsy oturumu: ${st.loggedIn === true ? "açık" : st.loggedIn === false ? "KAPALI" : "bilinmiyor"}${st.shopName ? " · " + st.shopName : ""}`,
+    `Çalıştırıcı: ${st.module}${st.remoteModules ? " (uzaktan güncelleme açık)" : " (uzaktan güncelleme kapalı)"}`,
+    `Son iş: ${st.lastJob ? `#${st.lastJob.id} ${st.lastJob.kind} ${st.lastJob.ok ? "✓" : "✗"} ${st.lastJob.at}` : "yok"}`,
+    st.pausedUntil > Date.now() ? `Etsy engeli sonrası bekleme: ${new Date(st.pausedUntil).toLocaleTimeString()} kadar` : "",
+    st.lastError ? `Son hata: ${st.lastError}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 // The list currently shown in the #recent textarea (newest first), so a click
@@ -83,6 +106,7 @@ $("save").addEventListener("click", async () => {
     apiToken: fields.apiToken.value.trim(),
     forwardEnabled: fields.forwardEnabled.checked,
     captureAll: fields.captureAll.checked,
+    agentEnabled: fields.agentEnabled.checked,
   };
   if (patch.forwardEnabled && patch.apiHost) await ensureApiPermission(patch.apiHost);
   await saveSettings(patch);
@@ -92,6 +116,11 @@ $("save").addEventListener("click", async () => {
 });
 
 $("refresh").addEventListener("click", () => void refreshRecent());
+$("agentRun").addEventListener("click", async () => {
+  $("agentStatus").textContent = "çalışıyor…";
+  await chrome.runtime.sendMessage({ type: "AGENT_RUN_NOW" });
+  await refreshAgent();
+});
 $("clear").addEventListener("click", async () => {
   await clearRecent();
   await refreshRecent();

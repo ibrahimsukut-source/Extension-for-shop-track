@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "apiHost": { "type": "string", "description": "Komuta merkezi adresi, ör. https://magaza-crm.fly.dev" },
+    "apiToken": { "type": "string", "description": "Bu mağazanın ajan anahtarı" },
+    "shopTag": { "type": "string", "description": "Mağaza etiketi (merkezdeki ad)" },
+    "vpsHost": { "type": "string" },
+    "chromeProfile": { "type": "string" },
+    "forwardEnabled": { "type": "boolean" },
+    "agentEnabled": { "type": "boolean" }
+  }
+}

@@ -25,6 +25,8 @@ export interface Settings {
    * seller panel and folded into endpoints.config.json. Local-only; not forwarded.
    */
   captureAll: boolean;
+  /** Command-center agent: poll for jobs and run them (needs apiHost + apiToken). */
+  agentEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,13 +37,37 @@ export const DEFAULT_SETTINGS: Settings = {
   chromeProfile: "",
   forwardEnabled: false,
   captureAll: false,
+  agentEnabled: true,
 };
 
 const KEY = "settings";
 
+/**
+ * Values pushed by Chrome policy (chrome.storage.managed, see managed_schema.json)
+ * win over local edits — that is how a VPS is configured without touching the
+ * options page: the token/host/shop tag come from the Windows registry.
+ */
+async function getManaged(): Promise<Partial<Settings>> {
+  try {
+    const m = (await chrome.storage.managed.get(null)) as Partial<Settings>;
+    const out: Partial<Settings> = {};
+    for (const [k, v] of Object.entries(m ?? {})) {
+      if (v !== undefined && v !== null && v !== "") (out as Record<string, unknown>)[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export async function getSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(KEY);
-  return { ...DEFAULT_SETTINGS, ...(stored[KEY] as Partial<Settings> | undefined) };
+  return { ...DEFAULT_SETTINGS, ...(stored[KEY] as Partial<Settings> | undefined), ...(await getManaged()) };
+}
+
+/** Keys currently locked by policy (shown read-only in the options page). */
+export async function managedKeys(): Promise<string[]> {
+  return Object.keys(await getManaged());
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
@@ -51,6 +77,10 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
 }
 
 /** True when the API forwarding path is fully configured and enabled. */
+export function canRunAgent(s: Settings): boolean {
+  return s.agentEnabled && s.apiHost.trim() !== "" && s.apiToken.trim() !== "";
+}
+
 export function canForward(s: Settings): boolean {
   return s.forwardEnabled && s.apiHost.trim() !== "" && s.apiToken.trim() !== "";
 }

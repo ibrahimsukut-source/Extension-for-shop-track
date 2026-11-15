@@ -2,7 +2,9 @@
 // columns the app uses from db/schema.sql, but omits Postgres-only features
 // pg-mem doesn't implement (the response_metrics view, partial indexes). Used
 // only when DATABASE_URL is "memory"/empty — a real Postgres uses db/schema.sql.
-export const MEMORY_SCHEMA = `
+import { AGENT_SCHEMA } from "./agent/schema.js";
+
+export const MEMORY_SCHEMA_BASE = `
 CREATE TABLE shops (
   id SERIAL PRIMARY KEY,
   shop_tag TEXT UNIQUE NOT NULL,
@@ -159,3 +161,5 @@ CREATE TABLE effects (
   computed_at TIMESTAMPTZ DEFAULT now()
 );
 `;
+
+export const MEMORY_SCHEMA = MEMORY_SCHEMA_BASE + AGENT_SCHEMA;
