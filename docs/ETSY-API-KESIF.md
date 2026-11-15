@@ -59,14 +59,13 @@ Click rate, Views ve "Relevant keyword?" anahtarı = `is_relevant`.
 | Listing reklamını aç/kapa | `POST /prolist/listings` | `{listings: {"<listing_id>": true/false, …}}` → `{listings, countOfAdvertisedListings}` |
 | Arama terimini kapat/aç | `POST /prolist/listing-query` | `{listing_id, query, is_relevant}` |
 | Listing stratejisi | `POST /prolist/listings/strategy` | `{listings: …}` (yapı canlı yakalanmalı) |
-| Günlük bütçe | `PUT /prolist/campaign-budget` | `{budget, ignore_credit_limit?}` → `{totalDailyBudget,…}` — **birim (kuruş/dolar) canlı doğrulanmadı** |
+| Günlük bütçe | `PUT /prolist/campaign-budget` | `{budget}` **kuruş** (canlı doğrulandı 16.11.2026: $51 → `{"budget":5100}`, yanıt 201 `{totalDailyBudget:5100,…}`); Etsy sınırı $1–$200/gün |
 | Kampanya oluştur | `POST /prolist/campaign` | `{budget}` |
 | Kampanyayı yeniden başlat | `PUT /prolist/campaign-restart` | `{budget}` |
 | Önerilen tag'leri uygula | `POST /prolist/recommended-tags/update` | `{listing_id, tags, skip_campaign_check?}` |
 | Reklam grubu üyeliği | `PUT /prolist/listing-groups/memberships` | `{listing_ids, group_id}` |
 
-Bütçe birimi ve strateji gövdesi doğrulanana kadar ajan bu iki işlemi
-"doğrulanmamış" sayar ve çalıştırmaz (bkz. `extension/src/agent/jobs.ts`).
+Strateji gövdesi henüz canlı yakalanmadı; ajan strateji değiştirmez.
 
 ## 4. Stats
 

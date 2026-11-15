@@ -1,5 +1,7 @@
 # Etsy Komuta Merkezi — Kurulum ve Kullanım
 
+> **Canlı merkez MağazaCRM'in içinde** (`magaza-saas`: Araçlar → Etsy Reklam Merkezi, mağaza → Reklam sekmesi; ayrıntı `magaza-saas/docs/ETSY-REKLAM-AJANI.md`). Bu repodaki `api/` sürümü aynı protokolün analitik/test sunucusudur; eklenti ikisiyle de çalışır.
+
 Her mağazanın Chrome'undaki eklenti (ajan) merkeze bağlanır. Merkez işi verir, ajan Etsy'de yapar ve sonucu geri yollar.
 
 Ajanın yaptığı işler:
@@ -29,7 +31,7 @@ Komuta paneli (/komuta) ──talimat──▶ Merkez (agent_jobs kuyruğu)
 | `collect.shop_stats` | Ziyaret, sipariş, gelir, dönüşüm, ortalama sepet, trafik kaynakları, en çok ziyaret alan listingler | aynı |
 | `ads.set_promoted` | Seçili listinglerin reklamını aç/kapa (50'lik parçalar halinde) | Senin talimatınla |
 | `ads.set_query_relevance` | Bir listing için arama terimini kapat / tekrar aç | Senin talimatınla |
-| `ads.set_budget` | Günlük bütçe | Senin talimatınla. **Şimdilik kapalı** (aşağıya bak) |
+| `ads.set_budget` | Günlük bütçe (kuruş olarak gönderilir, doğrulandı) | Senin talimatınla |
 
 Öneri motoru her toplamadan sonra çalışır. **Hiçbir şeyi kendisi uygulamaz**, öneriyi panelde senin onayına sunar:
 
@@ -56,7 +58,7 @@ Uygulanan her değişiklik iki yere kaydedilir:
   - `MAX_DAILY_BUDGET_USD` (varsayılan 100),
   - `MAX_LISTINGS_PER_TOGGLE` (varsayılan 200),
   - panelden mağaza bazında **Duraklat**.
-- **Bütçe değişikliği kapalı:** `BUDGET_WRITE_ENABLED=false` varsayılan. Etsy'nin bütçe isteğinin birimi (kuruş mu dolar mı) canlı doğrulanmadı. Paneldeki bütçeyi bir kez $50 → $51 → $50 değiştirip isteği yakaladıktan sonra açılacak.
+- **Bütçe:** Etsy'nin bütçe isteği canlı doğrulandı (kuruş). Güvenlik sınırı varsayılan $100/gün.
 
 ## 1. Merkezi kurma
 
