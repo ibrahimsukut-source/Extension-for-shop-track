@@ -8,8 +8,7 @@
 # Yaptıkları:
 #   1. Chrome'u ücretsiz Chrome Enterprise Core'a kaydeder (Web Store dışı eklentiyi
 #      zorunlu kurmak için Chrome'un istediği koşul).
-#   2. Eklentiyi kendi sunucumuzdan zorunlu kurar; Chrome birkaç saatte bir
-#      updates.xml'i kontrol edip yeni sürümü kendisi yükler.
+#   2. (Zorunlu kurulum Yönetici Konsolu'ndan; burada yalnız eski yerel kaydı temizler.)
 #   3. Mağazaya özel ayarları (merkez adresi, token, mağaza etiketi) politika
 #      olarak yazar — eklentinin ayar sayfasına girmeye gerek kalmaz.
 #   4. Arka plan sekmelerinin dakikada bire kısılmasını kapatır (ajanın çalıştığı
@@ -32,13 +31,11 @@ if ($EnrollmentToken) {
   Set-ItemProperty -Path $chrome -Name "CloudManagementEnrollmentMandatory" -Value 1 -Type DWord
 }
 
-# Zorunlu kurulum + kendi güncelleme adresimiz
-$force = "$chrome\ExtensionInstallForcelist"
-New-Item -Path $force -Force | Out-Null
-Set-ItemProperty -Path $force -Name "1" -Value "$ExtensionId;$CommandCenter/ext/updates.xml"
-$sources = "$chrome\ExtensionInstallSources"
-New-Item -Path $sources -Force | Out-Null
-Set-ItemProperty -Path $sources -Name "1" -Value "$CommandCenter/*"
+# Zorunlu kurulum Google Yönetici Konsolu'ndan yapılır (Apps & extensions → ID + özel URL → Force install).
+# Chrome, etki alanına bağlı olmayan Windows'ta Web Store dışı eklentiyi YEREL kayıt defteri politikasıyla
+# kurmaz ("[BLOCKED]"); bulut politikasıyla kurar. Eski sürümün yazdığı yerel kaydı temizle.
+Remove-Item -Path "$chrome\ExtensionInstallForcelist" -Recurse -ErrorAction SilentlyContinue
+Remove-Item -Path "$chrome\ExtensionInstallSources" -Recurse -ErrorAction SilentlyContinue
 
 # Mağazaya özel ayarlar (chrome.storage.managed)
 $ext = "$chrome\3rdparty\extensions\$ExtensionId\policy"
