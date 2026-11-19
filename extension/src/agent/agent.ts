@@ -16,6 +16,9 @@ const STATE_KEY = "agentState";
 const MODULE_KEY = "agentModule";
 const MAX_JOBS_PER_TICK = 5;
 const LOGIN_REPROBE_MS = 15 * 60_000;
+// Which shop is open in this Chrome is re-checked periodically: the command
+// center matches this Chrome to a shop by it (VPS keys) and refuses mismatches.
+const SHOP_REPROBE_MS = 3 * 60 * 60_000;
 const BLOCK_COOLDOWN_MS = 2 * 60 * 60_000;
 
 interface AgentState {
@@ -42,7 +45,8 @@ interface PollResponse {
   pollSeconds: number;
   paused: boolean;
   modules: { name: string; version: string } | null;
-  job: { id: number; kind: string; params: Record<string, unknown>; attempt: number } | null;
+  job: { id: number; kind: string; params: Record<string, unknown>; attempt: number; expect?: { shopName?: string | null; shopId?: number | string | null } } | null;
+  message?: string;
 }
 
 interface RunOutcome {
@@ -255,7 +259,8 @@ export async function agentTick(): Promise<void> {
   if (st.running && Date.now() - st.runningSince < 20 * 60_000) return;
   st = await patchState({ running: true, runningSince: Date.now() });
   try {
-    if (st.loggedIn !== true && Date.now() - st.lastProbeAt > LOGIN_REPROBE_MS) {
+    const sinceProbe = Date.now() - st.lastProbeAt;
+    if ((st.loggedIn !== true && sinceProbe > LOGIN_REPROBE_MS) || sinceProbe > SHOP_REPROBE_MS || !st.shopName) {
       await probeLogin();
       st = await getState();
     }
@@ -267,6 +272,11 @@ export async function agentTick(): Promise<void> {
         body: JSON.stringify({ ...(await heartbeatBody(st, mod?.version ?? `builtin ${RUNNER_VERSION}`)), loggedIn: blocked ? false : st.loggedIn }),
       });
       await maybeUpdateModule(s, poll.modules).catch((e) => console.warn("[agent] module update failed", e));
+      if (poll.message) {
+        st = await patchState({ lastError: `merkez: ${poll.message}` });
+        // Center couldn't match this Chrome to a shop: look again (shop may have changed).
+        if (!poll.job && Date.now() - st.lastProbeAt > LOGIN_REPROBE_MS) await probeLogin();
+      }
       if (!poll.job || blocked) break;
 
       const job = poll.job;
@@ -281,6 +291,7 @@ export async function agentTick(): Promise<void> {
         lastError: out.ok ? null : out.error ?? null,
       };
       if (out.code === "not_logged_in") Object.assign(patch, { loggedIn: false, lastProbeAt: Date.now() });
+      if (out.code === "wrong_shop") patch.lastProbeAt = 0; // re-identify on the next tick
       if (out.ok) patch.loggedIn = true;
       if (out.code === "blocked") patch.pausedUntil = Date.now() + BLOCK_COOLDOWN_MS;
       if (out.ok && job.kind === "collect.ads") {
@@ -289,7 +300,7 @@ export async function agentTick(): Promise<void> {
       }
       st = await patchState(patch);
       await reportResult(s, job.id, out);
-      if (out.code === "blocked" || out.code === "not_logged_in") break;
+      if (out.code === "blocked" || out.code === "not_logged_in" || out.code === "wrong_shop") break;
     }
   } catch (e) {
     await patchState({ lastError: `merkez: ${(e as Error).message}` });

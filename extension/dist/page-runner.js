@@ -1,8 +1,8 @@
-/*! oc-runner 2026.11.16-2 */
+/*! oc-runner 2026.11.20-1 */
 "use strict";
 (() => {
   // src/agent/version.ts
-  var RUNNER_VERSION = "2026.11.16-2";
+  var RUNNER_VERSION = "2026.11.20-1";
 
   // src/agent/page-runner.ts
   var AgentError = class extends Error {
@@ -408,6 +408,14 @@
     try {
       const d = ctx();
       const c = caller(d);
+      const e = job.expect;
+      if (e && job.kind !== "probe") {
+        const nameOk = !e.shopName || String(e.shopName).toLowerCase() === String(d.shop_name ?? "").toLowerCase();
+        const idOk = !e.shopId || String(e.shopId) === String(c.shopId);
+        if (!nameOk || !idOk) {
+          return { ok: false, code: "wrong_shop", error: `Bu Chrome'da ${d.shop_name} a\xE7\u0131k, i\u015F ${e.shopName} i\xE7in \u2014 hi\xE7bir \u015Fey yap\u0131lmad\u0131` };
+        }
+      }
       switch (job.kind) {
         case "probe":
           return { ok: true, result: { shopId: c.shopId, shopName: d.shop_name, path: location.pathname } };

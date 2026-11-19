@@ -28,6 +28,8 @@ interface Job {
   id: number;
   kind: string;
   params: Record<string, any>;
+  /** The shop the command center means. The job does nothing in any other shop. */
+  expect?: { shopName?: string | null; shopId?: number | string | null };
 }
 
 interface RunOutcome {
@@ -35,7 +37,7 @@ interface RunOutcome {
   result?: Json;
   error?: string;
   /** Machine-readable failure class the background acts on. */
-  code?: "not_logged_in" | "blocked" | "wrong_page" | "unsupported" | "error";
+  code?: "not_logged_in" | "blocked" | "wrong_page" | "wrong_shop" | "unsupported" | "error";
 }
 
 class AgentError extends Error {
@@ -492,6 +494,15 @@ export async function run(job: Job): Promise<RunOutcome> {
   try {
     const d = ctx();
     const c = caller(d);
+    // Safety: never collect or change anything in a shop other than the one meant.
+    const e = job.expect;
+    if (e && job.kind !== "probe") {
+      const nameOk = !e.shopName || String(e.shopName).toLowerCase() === String(d.shop_name ?? "").toLowerCase();
+      const idOk = !e.shopId || String(e.shopId) === String(c.shopId);
+      if (!nameOk || !idOk) {
+        return { ok: false, code: "wrong_shop", error: `Bu Chrome'da ${d.shop_name} açık, iş ${e.shopName} için — hiçbir şey yapılmadı` };
+      }
+    }
     switch (job.kind) {
       case "probe":
         return { ok: true, result: { shopId: c.shopId, shopName: d.shop_name, path: location.pathname } };
