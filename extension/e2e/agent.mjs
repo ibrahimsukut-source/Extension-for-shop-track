@@ -9,6 +9,7 @@
 //   npm run build && xvfb-run -a node e2e/agent.mjs
 import { chromium } from "playwright-core";
 import { spawn, execSync } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -42,7 +43,9 @@ function page(initialData) {
   <script>window.Etsy=window.Etsy||{};Etsy.Context = ${JSON.stringify({ page: null, data: { shop_id: SHOP, shop_name: "FakeShop", locale_settings: { currency: { code: "USD" }, language: { code: "en-US" } }, initial_data: initialData } })};</script>
   <script>window.__nativeFetch = window.fetch;</script></body></html>`;
 }
+let etsyHits = 0;
 async function fakeEtsy(route) {
+  etsyHits++;
   const req = route.request();
   const url = new URL(req.url());
   const json = (b, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(b) });
@@ -192,7 +195,43 @@ try {
   assert.equal(promoted.get(102), false);
   const after = await center("/admin/v1/shops/fake-shop/ads");
   assert.equal(after.listings.find((l) => Number(l.listing_id) === 102).is_promoted, false);
-  console.log("agent e2e: OK — collect.ads, collect.shop_stats, suggestion → verified ad-off write");
+
+  // 3) Master switch: a halted center means the agent must not touch Etsy at all
+  //    (no probe, no worker tab) and must re-ask only after the recheck window.
+  let controlCalls = 0;
+  const haltCenter = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      res.setHeader("access-control-allow-origin", "*");
+      res.setHeader("access-control-allow-headers", "authorization, content-type");
+      if (req.method === "OPTIONS") return res.end();
+      if (req.url === "/agent/v1/poll") controlCalls++;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ pollSeconds: 600, paused: true, halt: true, modules: null, job: null }));
+    });
+  });
+  await new Promise((r) => haltCenter.listen(PORT + 1, "127.0.0.1", r));
+  try {
+    await sw.evaluate(async ([host, token]) => {
+      await chrome.storage.local.set({ settings: { apiHost: host, apiToken: token, shopTag: "fake-shop", agentEnabled: true } });
+      const st = (await chrome.storage.local.get("agentState")).agentState;
+      // Force the path that would normally probe Etsy right away.
+      await chrome.storage.local.set({ agentState: { ...st, lastProbeAt: 0, shopName: null, running: false } });
+    }, [`http://127.0.0.1:${PORT + 1}`, TOKEN]);
+    const hitsBefore = etsyHits;
+    await tick();
+    await until(async () => (await options.evaluate(() => chrome.runtime.sendMessage({ type: "AGENT_STATUS" }))).halted === true, 15000);
+    await new Promise((r) => setTimeout(r, 3000));
+    await tick();
+    await new Promise((r) => setTimeout(r, 2000));
+    assert.equal(etsyHits, hitsBefore, "halted agent must not request anything from Etsy");
+    assert.equal(controlCalls, 1, "halted agent re-asks the center only after the recheck window");
+    assert.equal(ctx.pages().filter((p) => p.url().startsWith("https://www.etsy.com/")).length, 0, "worker tab must be closed when halted");
+  } finally {
+    haltCenter.close();
+  }
+  console.log("agent e2e: OK — collect.ads, collect.shop_stats, suggestion → verified ad-off write, master switch halt");
 } finally {
   await ctx?.close().catch(() => {});
   server.kill();

@@ -20,6 +20,9 @@ const LOGIN_REPROBE_MS = 15 * 60_000;
 // center matches this Chrome to a shop by it (VPS keys) and refuses mismatches.
 const SHOP_REPROBE_MS = 3 * 60 * 60_000;
 const BLOCK_COOLDOWN_MS = 2 * 60 * 60_000;
+// Command-center master switch: while halted, the agent touches nothing on Etsy
+// and only asks the center (no Etsy page) every HALT_RECHECK_MS.
+const HALT_RECHECK_MS = 10 * 60_000;
 
 interface AgentState {
   agentId: string;
@@ -33,6 +36,8 @@ interface AgentState {
   running: boolean;
   runningSince: number;
   lastJob: { id: number; kind: string; ok: boolean; at: string; error?: string } | null;
+  halted: boolean;
+  haltCheckedAt: number;
 }
 
 interface StoredModule {
@@ -44,6 +49,8 @@ interface StoredModule {
 interface PollResponse {
   pollSeconds: number;
   paused: boolean;
+  /** Master switch off: do not open or touch Etsy at all. */
+  halt?: boolean;
   modules: { name: string; version: string } | null;
   job: { id: number; kind: string; params: Record<string, unknown>; attempt: number; expect?: { shopName?: string | null; shopId?: number | string | null } } | null;
   message?: string;
@@ -70,6 +77,8 @@ async function getState(): Promise<AgentState> {
     running: s?.running ?? false,
     runningSince: s?.runningSince ?? 0,
     lastJob: s?.lastJob ?? null,
+    halted: s?.halted ?? false,
+    haltCheckedAt: s?.haltCheckedAt ?? 0,
   };
 }
 async function patchState(p: Partial<AgentState>): Promise<AgentState> {
@@ -218,6 +227,40 @@ async function maybeUpdateModule(s: Settings, offered: PollResponse["modules"]):
   console.log(`[agent] runner module updated → ${mod.version}`);
 }
 
+// ── Master switch ────────────────────────────────────────────────────────
+async function closeWorkerTab(): Promise<void> {
+  const st = await getState();
+  if (st.workerTabId !== null) {
+    await chrome.tabs.remove(st.workerTabId).catch(() => undefined);
+    await patchState({ workerTabId: null });
+  }
+}
+
+async function halt(): Promise<void> {
+  await patchState({ halted: true, haltCheckedAt: Date.now(), lastError: "merkez: ana şalter kapalı — Etsy'ye dokunulmuyor" });
+  await closeWorkerTab();
+}
+
+/** Asks the center (never Etsy) whether the agent may run. Invalid key = halt too. */
+async function centerAllows(s: Settings, st: AgentState, moduleVersion: string): Promise<boolean> {
+  try {
+    const ctl = await api<PollResponse>(s, "/agent/v1/poll", {
+      method: "POST",
+      body: JSON.stringify({ ...(await heartbeatBody(st, moduleVersion)), control: true }),
+    });
+    if (ctl.halt) {
+      await halt();
+      return false;
+    }
+    if (st.halted) await patchState({ halted: false, haltCheckedAt: Date.now(), lastError: null });
+    return true;
+  } catch (e) {
+    if (/HTTP 401/.test((e as Error).message)) await halt();
+    else await patchState({ lastError: `merkez: ${(e as Error).message}` });
+    return false;
+  }
+}
+
 // ── Main loop ─────────────────────────────────────────────────────────────
 async function heartbeatBody(st: AgentState, moduleVersion: string) {
   return {
@@ -255,10 +298,15 @@ export async function agentTick(): Promise<void> {
   const s = await getSettings();
   if (!canRunAgent(s)) return;
   let st = await getState();
+  if (st.halted && Date.now() - st.haltCheckedAt < HALT_RECHECK_MS) return;
   // A crashed run (SW killed mid-job) must not wedge the agent forever.
   if (st.running && Date.now() - st.runningSince < 20 * 60_000) return;
   st = await patchState({ running: true, runningSince: Date.now() });
   try {
+    // Ask the center first: nothing below may open Etsy unless the switch is on.
+    const modVersion = ((await chrome.storage.local.get(MODULE_KEY))[MODULE_KEY] as StoredModule | undefined)?.version ?? `builtin ${RUNNER_VERSION}`;
+    if (!(await centerAllows(s, st, modVersion))) return;
+    st = await getState();
     const sinceProbe = Date.now() - st.lastProbeAt;
     if ((st.loggedIn !== true && sinceProbe > LOGIN_REPROBE_MS) || sinceProbe > SHOP_REPROBE_MS || !st.shopName) {
       await probeLogin();
@@ -271,6 +319,10 @@ export async function agentTick(): Promise<void> {
         method: "POST",
         body: JSON.stringify({ ...(await heartbeatBody(st, mod?.version ?? `builtin ${RUNNER_VERSION}`)), loggedIn: blocked ? false : st.loggedIn }),
       });
+      if (poll.halt) {
+        await halt();
+        break;
+      }
       await maybeUpdateModule(s, poll.modules).catch((e) => console.warn("[agent] module update failed", e));
       if (poll.message) {
         st = await patchState({ lastError: `merkez: ${poll.message}` });

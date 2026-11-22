@@ -48,6 +48,8 @@ const heartbeatBody = z.object({
   loggedIn: z.boolean().nullish(),
   lastError: z.string().max(2000).nullish(),
   state: z.unknown().optional(),
+  /** Control check before the agent touches Etsy: no job is leased. */
+  control: z.boolean().optional(),
 });
 
 const resultBody = z.object({
@@ -109,7 +111,7 @@ export async function agentHub(app: FastifyInstance, opts: AgentHubOptions): Pro
       paused,
       modules: opts.modules ? await opts.modules.manifest() : null,
     };
-    if (paused) return reply.send({ ...base, job: null });
+    if (paused || hb.data.control) return reply.send({ ...base, halt: false, job: null });
     // Don't schedule collection while logged out — it would only fail.
     if (hb.data.loggedIn !== false) await autoSchedule(shopTag);
     else return reply.send({ ...base, job: null });
