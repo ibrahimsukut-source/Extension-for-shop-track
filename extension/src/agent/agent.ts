@@ -114,6 +114,8 @@ const PAGE_FOR: Record<string, (p: Record<string, unknown>) => string> = {
   "ads.set_promoted": () => "https://www.etsy.com/your/shops/me/advertising",
   "ads.set_query_relevance": () => "https://www.etsy.com/your/shops/me/advertising",
   "ads.set_budget": () => "https://www.etsy.com/your/shops/me/advertising",
+  "collect.monthly_statement": (p) =>
+    `https://www.etsy.com/your/account/payments/monthly-statement?month=${Number(p.month)}&year=${Number(p.year)}`,
 };
 
 function waitForComplete(tabId: number, timeoutMs = 45_000): Promise<void> {

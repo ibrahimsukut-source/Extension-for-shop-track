@@ -1,8 +1,48 @@
-/*! oc-runner 2026.11.20-1 */
+/*! oc-runner 2026.11.26-1 */
 "use strict";
 (() => {
+  // src/agent/statement.ts
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  var clean = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
+  function currencyFromAmount(text) {
+    const t = text.replace(/[\d.,\s+-]/g, "");
+    const map = { TL: "TRY", "\u20BA": "TRY", $: "USD", US$: "USD", "\u20AC": "EUR", "\xA3": "GBP", CA$: "CAD", AU$: "AUD", NZ$: "NZD", "\xA5": "JPY" };
+    return map[t] ?? (/^[A-Z]{3}$/.test(t) ? t : null);
+  }
+  function readMonthlyStatement(doc, month, year) {
+    const profitEl = doc.querySelector('[data-test-id="profit-amount"]');
+    const headEl = doc.querySelector('[data-test-id="activity-summary-profit"]');
+    const mods = Array.from(doc.querySelectorAll('[data-test-id="summary-module"]'));
+    if (!profitEl || !headEl || !mods.length) return null;
+    const heading = clean(headEl.textContent?.replace(/Your total Sales on Etsy.*?selected time period\./, ""));
+    const want = `${MONTHS[month - 1]} ${year}`;
+    if (!heading.includes(want)) {
+      const err = new Error(`Sayfa ${want} yerine ba\u015Fka bir d\xF6nemi g\xF6steriyor: "${heading.slice(0, 120)}"`);
+      err.code = "wrong_page";
+      throw err;
+    }
+    const modules = mods.map((m) => {
+      const title = clean(Array.from(m.querySelectorAll("h3")).find((h) => !h.hasAttribute("data-test-id"))?.textContent);
+      const total = clean(m.querySelector('[data-test-id="accordion-total"]')?.textContent) || null;
+      const rows = [];
+      for (const sec of Array.from(m.querySelectorAll('[data-test-id$="-section"]'))) {
+        const key = (sec.getAttribute("data-test-id") ?? "").replace(/-section$/, "");
+        for (const cell of Array.from(sec.querySelectorAll('[data-clg-id="WtGridItem"].wt-text-right-xs'))) {
+          const row = cell.closest('[data-clg-id="WtGrid"]');
+          if (!row || !sec.contains(row)) continue;
+          const main = row.querySelector('[data-test-id="child-label"]');
+          const label = clean(main?.textContent ?? row.querySelector("button span")?.textContent ?? "Credits");
+          rows.push({ key, label, value: clean(cell.textContent), credit: !main });
+        }
+      }
+      return { title, total, rows };
+    });
+    const profit = clean(profitEl.textContent);
+    return { month, year, heading, profit, currency: currencyFromAmount(profit), modules };
+  }
+
   // src/agent/version.ts
-  var RUNNER_VERSION = "2026.11.20-1";
+  var RUNNER_VERSION = "2026.11.26-1";
 
   // src/agent/page-runner.ts
   var AgentError = class extends Error {
@@ -404,6 +444,26 @@
       captures: [{ url: res.url, status: res.status, body: res.body }]
     };
   }
+  async function collectMonthlyStatement(d, p) {
+    const month = Number(p.month), year = Number(p.year);
+    if (!(month >= 1 && month <= 12) || !(year >= 2015 && year <= 2100)) throw new AgentError("error", "ge\xE7ersiz ay/y\u0131l");
+    const q = new URLSearchParams(location.search);
+    if (!/\/your\/account\/payments\/monthly-statement/.test(location.pathname) || Number(q.get("month")) !== month || Number(q.get("year")) !== year) {
+      throw new AgentError("wrong_page", `ayl\u0131k ekstre sayfas\u0131 a\xE7\u0131k de\u011Fil (${location.pathname})`);
+    }
+    const deadline = Date.now() + 4e4;
+    for (; ; ) {
+      let st;
+      try {
+        st = readMonthlyStatement(document, month, year);
+      } catch (e) {
+        throw new AgentError("wrong_page", e.message);
+      }
+      if (st) return { ...st, shop: { id: d.shop_id, name: d.shop_name } };
+      if (Date.now() > deadline) throw new AgentError("wrong_page", "ayl\u0131k \xF6zet sayfada g\xF6r\xFCnmedi (40 sn)");
+      await new Promise((r) => setTimeout(r, 700 + Math.random() * 900));
+    }
+  }
   async function run(job) {
     try {
       const d = ctx();
@@ -429,6 +489,8 @@
           return { ok: true, result: await setQueryRelevance(c, job.params) };
         case "ads.set_budget":
           return { ok: true, result: await setBudget(c, job.params) };
+        case "collect.monthly_statement":
+          return { ok: true, result: await collectMonthlyStatement(d, job.params) };
         default:
           return { ok: false, code: "unsupported", error: `bilinmeyen i\u015F: ${job.kind}` };
       }

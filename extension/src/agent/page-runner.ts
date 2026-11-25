@@ -20,6 +20,7 @@
 // to verify it really happened; anything that looks like a block page / captcha
 // / rate limit stops the job immediately (no retries hammering Etsy).
 
+import { readMonthlyStatement, type MonthlyStatement } from "./statement";
 import { RUNNER_VERSION } from "./version.js";
 
 type Json = any;
@@ -490,6 +491,28 @@ async function setBudget(c: Caller, p: Json): Promise<Json> {
   };
 }
 
+async function collectMonthlyStatement(d: Json, p: Json): Promise<Json> {
+  const month = Number(p.month), year = Number(p.year);
+  if (!(month >= 1 && month <= 12) || !(year >= 2015 && year <= 2100)) throw new AgentError("error", "geçersiz ay/yıl");
+  const q = new URLSearchParams(location.search);
+  if (!/\/your\/account\/payments\/monthly-statement/.test(location.pathname) || Number(q.get("month")) !== month || Number(q.get("year")) !== year) {
+    throw new AgentError("wrong_page", `aylık ekstre sayfası açık değil (${location.pathname})`);
+  }
+  // Özet, sayfa yüklendikten sonra Etsy'nin kendi isteğiyle çizilir: en fazla ~40 sn bekle
+  const deadline = Date.now() + 40_000;
+  for (;;) {
+    let st: MonthlyStatement | null;
+    try {
+      st = readMonthlyStatement(document, month, year);
+    } catch (e) {
+      throw new AgentError("wrong_page", (e as Error).message);
+    }
+    if (st) return { ...st, shop: { id: d.shop_id, name: d.shop_name } } as unknown as Json;
+    if (Date.now() > deadline) throw new AgentError("wrong_page", "aylık özet sayfada görünmedi (40 sn)");
+    await new Promise((r) => setTimeout(r, 700 + Math.random() * 900));
+  }
+}
+
 export async function run(job: Job): Promise<RunOutcome> {
   try {
     const d = ctx();
@@ -516,6 +539,8 @@ export async function run(job: Job): Promise<RunOutcome> {
         return { ok: true, result: await setQueryRelevance(c, job.params) };
       case "ads.set_budget":
         return { ok: true, result: await setBudget(c, job.params) };
+      case "collect.monthly_statement":
+        return { ok: true, result: await collectMonthlyStatement(d, job.params) };
       default:
         return { ok: false, code: "unsupported", error: `bilinmeyen iş: ${job.kind}` };
     }
